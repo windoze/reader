@@ -12,11 +12,7 @@ pub(super) fn json_opt<T: Serialize>(value: &Option<T>) -> Result<Option<String>
 
 pub(super) fn json_value<T: for<'de> Deserialize<'de>>(value: String) -> rusqlite::Result<T> {
     serde_json::from_str(&value).map_err(|error| {
-        rusqlite::Error::FromSqlConversionFailure(
-            0,
-            rusqlite::types::Type::Text,
-            Box::new(error),
-        )
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(error))
     })
 }
 

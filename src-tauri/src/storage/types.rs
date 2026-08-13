@@ -79,12 +79,34 @@ pub struct BookGroup {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ReaderSettings {
+    #[serde(default = "default_theme")]
     pub theme: String,
+    #[serde(default = "default_font_family")]
     pub font_family: String,
+    #[serde(default = "default_font_size")]
     pub font_size: i64,
+    #[serde(default = "default_line_height")]
     pub line_height: f64,
+    #[serde(default = "default_paragraph_spacing")]
     pub paragraph_spacing: f64,
+    #[serde(default = "default_content_width")]
     pub content_width: i64,
+    #[serde(default = "default_replace_epub_css")]
+    pub replace_epub_css: bool,
+}
+
+impl Default for ReaderSettings {
+    fn default() -> Self {
+        Self {
+            theme: default_theme(),
+            font_family: default_font_family(),
+            font_size: default_font_size(),
+            line_height: default_line_height(),
+            paragraph_spacing: default_paragraph_spacing(),
+            content_width: default_content_width(),
+            replace_epub_css: default_replace_epub_css(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -144,4 +166,32 @@ pub struct TextPaginationCache {
     pub pages: Vec<TextPage>,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+fn default_theme() -> String {
+    "light".to_string()
+}
+
+fn default_font_family() -> String {
+    "system".to_string()
+}
+
+fn default_font_size() -> i64 {
+    18
+}
+
+fn default_line_height() -> f64 {
+    1.75
+}
+
+fn default_paragraph_spacing() -> f64 {
+    1.0
+}
+
+fn default_content_width() -> i64 {
+    720
+}
+
+fn default_replace_epub_css() -> bool {
+    true
 }

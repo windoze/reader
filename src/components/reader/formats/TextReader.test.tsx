@@ -10,7 +10,8 @@ const settings: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.7,
   paragraphSpacing: 1,
-  contentWidth: 640
+  contentWidth: 640,
+  replaceEpubCss: true
 };
 
 const emptyLayoutCache = {

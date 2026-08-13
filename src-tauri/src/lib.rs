@@ -72,7 +72,10 @@ fn update_book(state: State<'_, AppState>, book: BookRecord) -> CommandResult<()
 }
 
 #[tauri::command]
-fn get_book_file(state: State<'_, AppState>, book_id: String) -> CommandResult<Option<StoredBookFile>> {
+fn get_book_file(
+    state: State<'_, AppState>,
+    book_id: String,
+) -> CommandResult<Option<StoredBookFile>> {
     with_storage(state, |storage| storage.get_book_file(&book_id))
 }
 
@@ -132,7 +135,10 @@ fn save_settings(state: State<'_, AppState>, settings: ReaderSettings) -> Comman
 }
 
 #[tauri::command]
-fn get_progress(state: State<'_, AppState>, book_id: String) -> CommandResult<Option<ReadingProgress>> {
+fn get_progress(
+    state: State<'_, AppState>,
+    book_id: String,
+) -> CommandResult<Option<ReadingProgress>> {
     with_storage(state, |storage| storage.get_progress(&book_id))
 }
 

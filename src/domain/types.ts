@@ -86,6 +86,7 @@ export interface ReaderSettings {
   lineHeight: number;
   paragraphSpacing: number;
   contentWidth: number;
+  replaceEpubCss: boolean;
 }
 
 export interface Bookmark {

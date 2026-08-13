@@ -41,7 +41,11 @@ impl Storage {
     pub(super) fn source_path(&self, book_id: &str) -> Result<Option<PathBuf>> {
         let value: Option<String> = self
             .library
-            .query_row("SELECT source_path FROM books WHERE id = ?1", [book_id], |row| row.get(0))
+            .query_row(
+                "SELECT source_path FROM books WHERE id = ?1",
+                [book_id],
+                |row| row.get(0),
+            )
             .optional()?;
         Ok(value.map(PathBuf::from))
     }

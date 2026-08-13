@@ -2,9 +2,7 @@ use anyhow::Result;
 use rusqlite::{params, OptionalExtension};
 
 use super::{
-    types::{
-        Annotation, Bookmark, ReaderSettings, ReadingProgress, TextPaginationCache,
-    },
+    types::{Annotation, Bookmark, ReadingProgress, TextPaginationCache},
     util::json_value,
     Storage,
 };
@@ -15,18 +13,19 @@ impl Storage {
             "SELECT id, book_id, label, locator_json, chapter_title, excerpt, created_at
              FROM bookmarks WHERE book_id = ?1 ORDER BY created_at DESC",
         )?;
-        let bookmarks = stmt.query_map([book_id], |row| {
-            Ok(Bookmark {
-                id: row.get(0)?,
-                book_id: row.get(1)?,
-                label: row.get(2)?,
-                locator: json_value(row.get::<_, String>(3)?)?,
-                chapter_title: row.get(4)?,
-                excerpt: row.get(5)?,
-                created_at: row.get(6)?,
-            })
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
+        let bookmarks = stmt
+            .query_map([book_id], |row| {
+                Ok(Bookmark {
+                    id: row.get(0)?,
+                    book_id: row.get(1)?,
+                    label: row.get(2)?,
+                    locator: json_value(row.get::<_, String>(3)?)?,
+                    chapter_title: row.get(4)?,
+                    excerpt: row.get(5)?,
+                    created_at: row.get(6)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
 
         Ok(bookmarks)
     }
@@ -50,7 +49,8 @@ impl Storage {
     }
 
     pub fn remove_bookmark(&mut self, bookmark_id: &str) -> Result<()> {
-        self.library.execute("DELETE FROM bookmarks WHERE id = ?1", [bookmark_id])?;
+        self.library
+            .execute("DELETE FROM bookmarks WHERE id = ?1", [bookmark_id])?;
         Ok(())
     }
 
@@ -59,19 +59,20 @@ impl Storage {
             "SELECT id, book_id, text, note, color, locator_json, chapter_title, created_at
              FROM annotations WHERE book_id = ?1 ORDER BY created_at DESC",
         )?;
-        let annotations = stmt.query_map([book_id], |row| {
-            Ok(Annotation {
-                id: row.get(0)?,
-                book_id: row.get(1)?,
-                text: row.get(2)?,
-                note: row.get(3)?,
-                color: row.get(4)?,
-                locator: json_value(row.get::<_, String>(5)?)?,
-                chapter_title: row.get(6)?,
-                created_at: row.get(7)?,
-            })
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
+        let annotations = stmt
+            .query_map([book_id], |row| {
+                Ok(Annotation {
+                    id: row.get(0)?,
+                    book_id: row.get(1)?,
+                    text: row.get(2)?,
+                    note: row.get(3)?,
+                    color: row.get(4)?,
+                    locator: json_value(row.get::<_, String>(5)?)?,
+                    chapter_title: row.get(6)?,
+                    created_at: row.get(7)?,
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
 
         Ok(annotations)
     }
@@ -96,24 +97,8 @@ impl Storage {
     }
 
     pub fn remove_annotation(&mut self, annotation_id: &str) -> Result<()> {
-        self.library.execute("DELETE FROM annotations WHERE id = ?1", [annotation_id])?;
-        Ok(())
-    }
-
-    pub fn get_settings(&self) -> Result<Option<ReaderSettings>> {
-        let json: Option<String> = self
-            .library
-            .query_row("SELECT value_json FROM settings WHERE key = 'reader'", [], |row| row.get(0))
-            .optional()?;
-        json.map(|value| serde_json::from_str(&value).map_err(Into::into))
-            .transpose()
-    }
-
-    pub fn save_settings(&mut self, settings: ReaderSettings) -> Result<()> {
-        self.library.execute(
-            "INSERT OR REPLACE INTO settings (key, value_json) VALUES ('reader', ?1)",
-            [serde_json::to_string(&settings)?],
-        )?;
+        self.library
+            .execute("DELETE FROM annotations WHERE id = ?1", [annotation_id])?;
         Ok(())
     }
 

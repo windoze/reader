@@ -564,8 +564,14 @@
   width: calc(var(--page-width) * 2 + var(--page-gap, 24px));
 }
 
+.epub-reader {
+  background: transparent;
+}
+
 .epub-reader iframe {
+  background: transparent !important;
   border-radius: 0;
+  color-scheme: inherit;
 }
 
 .bookmark-menu {

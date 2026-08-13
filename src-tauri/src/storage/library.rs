@@ -41,10 +41,14 @@ impl Storage {
     }
 
     pub fn add_book(&mut self, imported: ImportedBook) -> Result<()> {
-        let source_path =
-            self.source_path_for(&imported.book.id, &imported.book.file_name, &imported.book.format);
-        fs::write(&source_path, &imported.file.bytes)
-            .with_context(|| format!("failed to write source book file {}", source_path.display()))?;
+        let source_path = self.source_path_for(
+            &imported.book.id,
+            &imported.book.file_name,
+            &imported.book.format,
+        );
+        fs::write(&source_path, &imported.file.bytes).with_context(|| {
+            format!("failed to write source book file {}", source_path.display())
+        })?;
 
         let cover_json = json_opt(&imported.book.cover)?;
         let source_path_text = source_path.to_string_lossy().to_string();
@@ -131,8 +135,9 @@ impl Storage {
         let Some(source_path) = self.source_path(book_id)? else {
             return Ok(None);
         };
-        let bytes = fs::read(&source_path)
-            .with_context(|| format!("failed to read source book file {}", source_path.display()))?;
+        let bytes = fs::read(&source_path).with_context(|| {
+            format!("failed to read source book file {}", source_path.display())
+        })?;
         let text_content: Option<String> = self
             .book_derived
             .query_row(
@@ -141,7 +146,8 @@ impl Storage {
                 |row| row.get(0),
             )
             .optional()?;
-        let chapters = self.json_by_book_id::<Vec<TextChapter>>("chapters", "chapters_json", book_id)?;
+        let chapters =
+            self.json_by_book_id::<Vec<TextChapter>>("chapters", "chapters_json", book_id)?;
         let text_blocks =
             self.json_by_book_id::<Vec<TextChapterBlocks>>("text_blocks", "blocks_json", book_id)?;
 

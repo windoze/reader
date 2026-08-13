@@ -12,7 +12,8 @@ const settings: ReaderSettings = {
   fontSize: 18,
   lineHeight: 1.75,
   paragraphSpacing: 1,
-  contentWidth: 720
+  contentWidth: 720,
+  replaceEpubCss: true
 };
 
 describe("pagination layout", () => {
