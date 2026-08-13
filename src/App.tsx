@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import type { BookRecord, LibrarySnapshot } from "./domain/types";
 import { LibraryView } from "./components/library/LibraryView";
 import { ReaderView } from "./components/reader/ReaderView";
-import { libraryRepository } from "./services/browserLibraryRepository";
 import { buildImportedBook } from "./services/importBook";
+import { libraryRepository } from "./services/repository";
 import {
   parseAppRoute,
   routeForBook,

@@ -8,7 +8,8 @@ import type {
   LibrarySnapshot,
   ReaderSettings,
   ReadingProgress,
-  StoredBookFile
+  StoredBookFile,
+  TextPaginationCache
 } from "../domain/types";
 import { createId } from "../lib/id";
 import {
@@ -65,7 +66,18 @@ interface ReaderDB extends DBSchema {
   };
 }
 
+interface ReaderLayoutDB extends DBSchema {
+  textPagination: {
+    key: [string, string, string];
+    value: TextPaginationCache;
+    indexes: {
+      "by-book": string;
+    };
+  };
+}
+
 let dbPromise: Promise<IDBPDatabase<ReaderDB>> | undefined;
+let layoutDbPromise: Promise<IDBPDatabase<ReaderLayoutDB>> | undefined;
 
 export class BrowserLibraryRepository implements LibraryRepository {
   async listLibrary(): Promise<LibrarySnapshot> {
@@ -93,14 +105,17 @@ export class BrowserLibraryRepository implements LibraryRepository {
 
   async deleteBook(bookId: string): Promise<void> {
     const db = await getDb();
+    const layoutDb = await getLayoutDb();
     const tx = db.transaction(
       ["books", "files", "bookmarks", "annotations", "progress"],
       "readwrite"
     );
+    const layoutTx = layoutDb.transaction("textPagination", "readwrite");
     const [bookmarks, annotations] = await Promise.all([
       tx.objectStore("bookmarks").index("by-book").getAllKeys(bookId),
       tx.objectStore("annotations").index("by-book").getAllKeys(bookId)
     ]);
+    const layoutKeys = await layoutTx.objectStore("textPagination").index("by-book").getAllKeys(bookId);
 
     await Promise.all([
       tx.objectStore("books").delete(bookId),
@@ -108,7 +123,9 @@ export class BrowserLibraryRepository implements LibraryRepository {
       tx.objectStore("progress").delete(bookId),
       ...bookmarks.map((key) => tx.objectStore("bookmarks").delete(key)),
       ...annotations.map((key) => tx.objectStore("annotations").delete(key)),
-      tx.done
+      tx.done,
+      ...layoutKeys.map((key) => layoutTx.objectStore("textPagination").delete(key)),
+      layoutTx.done
     ]);
   }
 
@@ -206,9 +223,19 @@ export class BrowserLibraryRepository implements LibraryRepository {
   async saveProgress(progress: ReadingProgress): Promise<void> {
     await (await getDb()).put("progress", progress);
   }
-}
 
-export const libraryRepository = new BrowserLibraryRepository();
+  async getTextPaginationCache(
+    bookId: string,
+    chapterId: string,
+    fingerprint: string
+  ): Promise<TextPaginationCache | undefined> {
+    return (await getLayoutDb()).get("textPagination", [bookId, chapterId, fingerprint]);
+  }
+
+  async saveTextPaginationCache(cache: TextPaginationCache): Promise<void> {
+    await (await getLayoutDb()).put("textPagination", cache);
+  }
+}
 
 function getDb(): Promise<IDBPDatabase<ReaderDB>> {
   dbPromise ??= openDB<ReaderDB>("reader-web-library", 1, {
@@ -234,4 +261,17 @@ function getDb(): Promise<IDBPDatabase<ReaderDB>> {
   });
 
   return dbPromise;
+}
+
+function getLayoutDb(): Promise<IDBPDatabase<ReaderLayoutDB>> {
+  layoutDbPromise ??= openDB<ReaderLayoutDB>("reader-web-layout", 1, {
+    upgrade(db) {
+      const textPagination = db.createObjectStore("textPagination", {
+        keyPath: ["bookId", "chapterId", "fingerprint"]
+      });
+      textPagination.createIndex("by-book", "bookId");
+    }
+  });
+
+  return layoutDbPromise;
 }

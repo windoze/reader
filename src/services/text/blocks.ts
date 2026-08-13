@@ -1,12 +1,7 @@
-import type { TextChapter } from "../../../domain/types";
-import { smartSplitParagraphs } from "../../../services/text/paragraphs";
+import type { TextChapter, TextContentBlock } from "../../domain/types";
+import { smartSplitParagraphs } from "./paragraphs";
 
-export interface TextPageBlock {
-  kind: "heading" | "paragraph";
-  text: string;
-  start: number;
-  end: number;
-}
+export type TextPageBlock = TextContentBlock;
 
 export function buildChapterBlocks(chapter: TextChapter, chapterContent: string): TextPageBlock[] {
   const bodyStart = findBodyStart(chapterContent, chapter.title);

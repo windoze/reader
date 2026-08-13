@@ -1,4 +1,4 @@
-import type { TextPageBlock } from "./textBlocks";
+import type { TextPageBlock } from "../../../services/text/blocks";
 
 export interface TextPage {
   blocks: TextPageBlock[];

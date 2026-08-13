@@ -2,7 +2,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState
@@ -10,7 +9,9 @@ import {
 import type { CSSProperties } from "react";
 import type { ReaderLocator, ReaderSettings, StoredBookFile, TextChapter } from "../../../domain/types";
 import { shouldHandleReaderNavigationKey } from "../../../lib/keyboard";
+import type { LibraryRepository } from "../../../services/libraryRepository";
 import { chapterizeText } from "../../../services/text/chapterize";
+import { buildChapterBlocks, type TextPageBlock } from "../../../services/text/blocks";
 import { decodeTextBuffer } from "../../../services/text/encoding";
 import type { SelectionDraft } from "../annotations/SelectionAnnotator";
 import {
@@ -18,7 +19,6 @@ import {
   paginationCssVariables,
   paginationFingerprint
 } from "./paginationLayout";
-import { buildChapterBlocks, type TextPageBlock } from "./textBlocks";
 import {
   pageIndexForOffset,
   paginateTextBlocks,
@@ -26,8 +26,10 @@ import {
 } from "./textPagination";
 
 interface TextReaderProps {
+  bookId: string;
   file: StoredBookFile;
   initialLocator: ReaderLocator;
+  layoutCache: Pick<LibraryRepository, "getTextPaginationCache" | "saveTextPaginationCache">;
   settings: ReaderSettings;
   onLocatorChange(locator: ReaderLocator): void;
   onChapterTitleChange(title: string): void;
@@ -43,8 +45,10 @@ interface StageSize {
 }
 
 export function TextReader({
+  bookId,
   file,
   initialLocator,
+  layoutCache,
   settings,
   onLocatorChange,
   onChapterTitleChange,
@@ -153,11 +157,13 @@ export function TextReader({
       return [];
     }
 
-    return buildChapterBlocks(
+    const derivedBlocks = file.textBlocks?.find((chapterBlocks) => chapterBlocks.chapterId === activeChapter.id);
+
+    return derivedBlocks?.blocks ?? buildChapterBlocks(
       activeChapter,
       text.slice(activeChapter.start, activeChapter.end)
     );
-  }, [activeChapter, text]);
+  }, [activeChapter, file.textBlocks, text]);
 
   useEffect(() => {
     if (!activeChapterId && firstReadableChapter) {
@@ -225,12 +231,7 @@ export function TextReader({
     return measurer.scrollHeight;
   }, []);
 
-  useLayoutEffect(() => {
-    if (!stageReady || !activeChapter || blocks.length === 0 || paginationLayout.sheetWidth <= 0) {
-      return;
-    }
-
-    const nextPages = paginateTextBlocks(blocks, paginationLayout.sheetHeight, measureBlocks);
+  const applyPages = useCallback((nextPages: TextPage[]) => {
     setPages(nextPages);
     setPageIndex((current) => {
       if (pendingLastPage) {
@@ -240,7 +241,7 @@ export function TextReader({
       if (
         !restoredInitialPage.current &&
         anchorLocatorRef.current &&
-        anchorLocatorRef.current.chapterId === activeChapter.id
+        anchorLocatorRef.current.chapterId === activeChapter?.id
       ) {
         const anchorOffset = anchorLocatorRef.current.offset;
 
@@ -259,9 +260,54 @@ export function TextReader({
     });
     setPendingLastPage(false);
     setIsInitialPageSettled(true);
+  }, [activeChapter?.id, pageMode, pendingLastPage]);
+
+  useEffect(() => {
+    if (!stageReady || !activeChapter || blocks.length === 0 || paginationLayout.sheetWidth <= 0) {
+      return;
+    }
+
+    let isActive = true;
+    setIsInitialPageSettled(false);
+
+    async function loadOrBuildPages() {
+      const cached = await layoutCache
+        .getTextPaginationCache(bookId, activeChapter!.id, paginationKey)
+        .catch(() => undefined);
+
+      if (!isActive) {
+        return;
+      }
+
+      if (cached) {
+        applyPages(cached.pages);
+        return;
+      }
+
+      const nextPages = paginateTextBlocks(blocks, paginationLayout.sheetHeight, measureBlocks);
+      const now = Date.now();
+      applyPages(nextPages);
+      void layoutCache.saveTextPaginationCache({
+        bookId,
+        chapterId: activeChapter!.id,
+        fingerprint: paginationKey,
+        pages: nextPages,
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+
+    void loadOrBuildPages();
+
+    return () => {
+      isActive = false;
+    };
   }, [
     activeChapter,
+    applyPages,
     blocks,
+    bookId,
+    layoutCache,
     measureBlocks,
     pageMode,
     paginationKey,

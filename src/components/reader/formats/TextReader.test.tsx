@@ -13,8 +13,18 @@ const settings: ReaderSettings = {
   contentWidth: 640
 };
 
+const emptyLayoutCache = {
+  getTextPaginationCache: vi.fn().mockResolvedValue(undefined),
+  saveTextPaginationCache: vi.fn().mockResolvedValue(undefined)
+};
+
 describe("TextReader pagination", () => {
   beforeEach(() => {
+    emptyLayoutCache.getTextPaginationCache.mockReset();
+    emptyLayoutCache.getTextPaginationCache.mockResolvedValue(undefined);
+    emptyLayoutCache.saveTextPaginationCache.mockReset();
+    emptyLayoutCache.saveTextPaginationCache.mockResolvedValue(undefined);
+
     vi.stubGlobal(
       "ResizeObserver",
       class ResizeObserverStub {
@@ -63,6 +73,7 @@ describe("TextReader pagination", () => {
 
     render(
       <TextReader
+        bookId="book-1"
         file={file}
         initialLocator={{
           kind: "txt",
@@ -70,6 +81,7 @@ describe("TextReader pagination", () => {
           offset: 0,
           percentage: 0.7
         }}
+        layoutCache={emptyLayoutCache}
         settings={settings}
         tocOpen={false}
         onChapterTitleChange={() => undefined}
@@ -104,6 +116,7 @@ describe("TextReader pagination", () => {
   it("repaginates when paragraph spacing changes", async () => {
     const file = makeSpacingBookFile();
     const baseProps = {
+      bookId: "book-spacing",
       file,
       initialLocator: {
         kind: "txt" as const,
@@ -111,6 +124,7 @@ describe("TextReader pagination", () => {
         offset: 0,
         percentage: 0
       },
+      layoutCache: emptyLayoutCache,
       tocOpen: false,
       onChapterTitleChange: () => undefined,
       onExcerptChange: () => undefined,
@@ -124,6 +138,12 @@ describe("TextReader pagination", () => {
 
     await screen.findByRole("heading", { name: "第一章" });
     await waitFor(() => expect(pageTotal()).toBe(1));
+    expect(emptyLayoutCache.saveTextPaginationCache).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bookId: "book-spacing",
+        chapterId: "chapter-1"
+      })
+    );
 
     rerender(<TextReader {...baseProps} settings={{ ...settings, paragraphSpacing: 2 }} />);
 

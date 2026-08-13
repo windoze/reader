@@ -37,6 +37,18 @@ export interface TextChapter {
   level: number;
 }
 
+export interface TextContentBlock {
+  kind: "heading" | "paragraph";
+  text: string;
+  start: number;
+  end: number;
+}
+
+export interface TextChapterBlocks {
+  chapterId: string;
+  blocks: TextContentBlock[];
+}
+
 export interface BookRecord {
   id: string;
   title: string;
@@ -58,6 +70,7 @@ export interface StoredBookFile {
   blob: Blob;
   textContent?: string;
   chapters?: TextChapter[];
+  textBlocks?: TextChapterBlocks[];
 }
 
 export interface BookGroup {
@@ -99,6 +112,19 @@ export interface Annotation {
 export interface ReadingProgress {
   bookId: string;
   locator: ReaderLocator;
+  updatedAt: number;
+}
+
+export interface TextPaginationCache {
+  bookId: string;
+  chapterId: string;
+  fingerprint: string;
+  pages: Array<{
+    blocks: TextContentBlock[];
+    startOffset: number;
+    endOffset: number;
+  }>;
+  createdAt: number;
   updatedAt: number;
 }
 

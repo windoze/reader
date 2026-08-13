@@ -404,8 +404,10 @@ export function ReaderView({
           <Suspense fallback={<p className="reader-loading">正在准备阅读器...</p>}>
             {book.format === "txt" ? (
               <TextReader
+                bookId={book.id}
                 file={file}
                 initialLocator={locator}
+                layoutCache={repository}
                 settings={settings}
                 onChapterTitleChange={setChapterTitle}
                 onExcerptChange={setExcerpt}

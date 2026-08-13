@@ -7,7 +7,8 @@ import type {
   LibrarySnapshot,
   ReaderSettings,
   ReadingProgress,
-  StoredBookFile
+  StoredBookFile,
+  TextPaginationCache
 } from "../domain/types";
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
@@ -38,4 +39,10 @@ export interface LibraryRepository {
   saveSettings(settings: ReaderSettings): Promise<void>;
   getProgress(bookId: string): Promise<ReadingProgress | undefined>;
   saveProgress(progress: ReadingProgress): Promise<void>;
+  getTextPaginationCache(
+    bookId: string,
+    chapterId: string,
+    fingerprint: string
+  ): Promise<TextPaginationCache | undefined>;
+  saveTextPaginationCache(cache: TextPaginationCache): Promise<void>;
 }

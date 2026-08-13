@@ -2,6 +2,7 @@ import type { ImportedBook } from "../domain/types";
 import { titleFromFileName, resolveBookFormat } from "../lib/file";
 import { createId } from "../lib/id";
 import { createBookCover } from "./covers";
+import { buildChapterBlocks } from "./text/blocks";
 import { chapterizeText } from "./text/chapterize";
 import { decodeTextFile } from "./text/encoding";
 
@@ -41,6 +42,13 @@ export async function buildImportedBook(file: File, groupId?: string): Promise<I
 
   const decoded = await decodeTextFile(file);
   const chapters = chapterizeText(decoded.text);
+  const textBlocks = chapters.map((chapter) => ({
+    chapterId: chapter.id,
+    blocks: buildChapterBlocks(
+      chapter,
+      decoded.text.slice(chapter.start, chapter.end)
+    )
+  }));
 
   return {
     book: {
@@ -52,7 +60,8 @@ export async function buildImportedBook(file: File, groupId?: string): Promise<I
       bookId,
       blob: file,
       textContent: decoded.text,
-      chapters
+      chapters,
+      textBlocks
     }
   };
 }
