@@ -1,4 +1,3 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { getDocument, TextLayer, type PDFDocumentProxy, type RenderTask } from "pdfjs-dist";
@@ -6,6 +5,7 @@ import type { ReaderLocator, ReaderSettings, StoredBookFile } from "../../../dom
 import { shouldHandleReaderNavigationKey } from "../../../lib/keyboard";
 import { ensurePdfWorker } from "../../../services/pdfWorker";
 import type { SelectionDraft } from "../annotations/SelectionAnnotator";
+import { PageTurnButton } from "../pagination/PageTurnButton";
 import { showReaderContextMenu } from "../readerContextMenu";
 import { READER_NAVIGATION_EVENT, type ReaderNavigationDirection } from "../readerGestures";
 import {
@@ -312,24 +312,13 @@ export function PdfReader({
 
       <div className="page-indicator">{pageNumber} / {pdf.numPages}</div>
 
-      <button
-        className="page-turn-zone previous"
+      <PageTurnButton
+        direction="previous"
         disabled={!canGoPrevious}
         title="上一页"
-        type="button"
-        onClick={goPrevious}
-      >
-        <ChevronLeft size={24} aria-hidden />
-      </button>
-      <button
-        className="page-turn-zone next"
-        disabled={!canGoNext}
-        title="下一页"
-        type="button"
-        onClick={goNext}
-      >
-        <ChevronRight size={24} aria-hidden />
-      </button>
+        onTurn={goPrevious}
+      />
+      <PageTurnButton direction="next" disabled={!canGoNext} title="下一页" onTurn={goNext} />
     </div>
   );
 }

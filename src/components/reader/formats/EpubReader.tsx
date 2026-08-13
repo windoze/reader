@@ -1,10 +1,10 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import ePub from "epubjs";
 import type { ReaderLocator, ReaderSettings, StoredBookFile } from "../../../domain/types";
 import { shouldHandleReaderNavigationKey } from "../../../lib/keyboard";
 import type { SelectionDraft } from "../annotations/SelectionAnnotator";
+import { PageTurnButton } from "../pagination/PageTurnButton";
 import { showReaderContextMenu } from "../readerContextMenu";
 import {
   buildPaginationLayout,
@@ -555,12 +555,8 @@ export function EpubReader({
           tabIndex={-1}
         />
 
-        <button className="page-turn-zone previous" title="上一页" type="button" onClick={goPrevious}>
-          <ChevronLeft size={24} aria-hidden />
-        </button>
-        <button className="page-turn-zone next" title="下一页" type="button" onClick={goNext}>
-          <ChevronRight size={24} aria-hidden />
-        </button>
+        <PageTurnButton direction="previous" title="上一页" onTurn={goPrevious} />
+        <PageTurnButton direction="next" title="下一页" onTurn={goNext} />
 
         {pageIndicator ? <div className="page-indicator">{pageIndicator}</div> : null}
       </section>

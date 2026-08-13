@@ -6,6 +6,7 @@
 /node_modules
 /sample-text
 /.playwright-cli
+/scripts/deploy-to-ipxvii.sh
 
 *.tsbuildinfo
 vite.config.js

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -21,6 +21,7 @@ import { buildChapterBlocks, type TextPageBlock } from "../../../services/text/b
 import { decodeTextBuffer } from "../../../services/text/encoding";
 import type { SelectionDraft } from "../annotations/SelectionAnnotator";
 import { showReaderContextMenu } from "../readerContextMenu";
+import { PageTurnButton } from "../pagination/PageTurnButton";
 import {
   buildPaginationLayout,
   paginationCssVariables,
@@ -770,12 +771,8 @@ export function TextReader({
           ))}
         </div>
 
-        <button className="page-turn-zone previous" title="上一页" type="button" onClick={goPrevious}>
-          <ChevronLeft size={24} aria-hidden />
-        </button>
-        <button className="page-turn-zone next" title="下一页" type="button" onClick={goNext}>
-          <ChevronRight size={24} aria-hidden />
-        </button>
+        <PageTurnButton direction="previous" title="上一页" onTurn={goPrevious} />
+        <PageTurnButton direction="next" title="下一页" onTurn={goNext} />
 
         {pageIndicator ? <div className="page-indicator">{pageIndicator}</div> : null}
 

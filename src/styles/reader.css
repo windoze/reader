@@ -590,17 +590,80 @@
   display: flex;
   align-items: center;
   width: min(16vw, 120px);
+  padding: 0;
   border: 0;
   color: color-mix(in srgb, var(--reader-muted) 72%, transparent);
+  appearance: none;
   background: transparent;
   opacity: 0;
+  outline: none;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
   transition: opacity 160ms ease;
 }
 
 .page-turn-zone:hover,
-.page-turn-zone:focus-visible {
+.page-turn-zone:focus-visible,
+.page-turn-zone:active {
   opacity: 1;
+}
+
+.page-turn-zone:active {
+  background: transparent;
+}
+
+.page-turn-zone > svg {
+  box-sizing: border-box;
+  width: 38px;
+  height: 38px;
+  padding: 7px;
+  border-radius: 999px;
+  background: transparent;
+  pointer-events: none;
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease,
+    color 140ms ease,
+    transform 110ms ease;
+}
+
+.page-turn-zone:hover > svg,
+.page-turn-zone:focus-visible > svg {
+  color: var(--reader-text);
+  background: color-mix(in srgb, var(--surface-bg) 90%, var(--reader-text) 10%);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--reader-text) 14%, transparent);
+}
+
+.page-turn-zone:focus-visible > svg {
+  outline: 2px solid color-mix(in srgb, var(--reader-text) 34%, transparent);
+  outline-offset: 2px;
+}
+
+.page-turn-zone:active > svg {
+  color: var(--reader-text);
+  background: color-mix(in srgb, var(--surface-bg) 78%, var(--reader-text) 22%);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--reader-text) 18%, transparent);
+  transform: scale(0.94);
+}
+
+.page-turn-zone.auto-hidden,
+.page-turn-zone.auto-hidden:hover,
+.page-turn-zone.auto-hidden:focus-visible,
+.page-turn-zone.auto-hidden:active {
+  opacity: 0;
+  transition: none;
+}
+
+.page-turn-zone.auto-hidden > svg,
+.page-turn-zone.auto-hidden:hover > svg,
+.page-turn-zone.auto-hidden:focus-visible > svg,
+.page-turn-zone.auto-hidden:active > svg {
+  color: color-mix(in srgb, var(--reader-muted) 72%, transparent);
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+  transform: none;
 }
 
 .page-turn-zone.previous {
