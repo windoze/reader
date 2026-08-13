@@ -1,5 +1,6 @@
 import { ArrowLeft, Highlighter, ListTree, Settings } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import type {
   Annotation,
   BookRecord,
@@ -15,6 +16,20 @@ import { AnnotationPanel } from "./annotations/AnnotationPanel";
 import { SelectionAnnotator, type SelectionDraft } from "./annotations/SelectionAnnotator";
 import { BookmarkMenu } from "./bookmarks/BookmarkMenu";
 import { ReaderSettingsPanel } from "./settings/ReaderSettingsPanel";
+import {
+  directionFromSwipe,
+  directionFromTap,
+  dispatchReaderNavigation,
+  hasReadableSelection,
+  isTapGesture,
+  isTouchLikePointer,
+  isHorizontalReaderWheel,
+  navigationDirectionFromWheel,
+  READER_CONTROLS_TOGGLE_EVENT,
+  shouldIgnoreReaderGestureTarget,
+  type ReaderPointerGesture,
+  type ReaderWheelGesture
+} from "./readerGestures";
 
 const TextReader = lazy(async () => ({
   default: (await import("./formats/TextReader")).TextReader
@@ -27,6 +42,7 @@ const EpubReader = lazy(async () => ({
 }));
 
 const BOOT_HASH = typeof window === "undefined" ? "" : window.location.hash;
+const TOOLBAR_HOVER_HEIGHT = 64;
 
 interface ReaderViewProps {
   book: BookRecord;
@@ -62,19 +78,125 @@ export function ReaderView({
   const [showAnnotations, setShowAnnotations] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
   const [error, setError] = useState<string>();
+  const [controlsVisible, setControlsVisible] = useState(true);
+  const [controlsActivityKey, setControlsActivityKey] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const tocButtonRef = useRef<HTMLButtonElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const annotationsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const annotationsPanelRef = useRef<HTMLDivElement>(null);
+  const controlsVisibleRef = useRef(true);
+  const controlsPinnedRef = useRef(false);
+  const pointerGestureRef = useRef<ReaderPointerGesture | undefined>(undefined);
+  const wheelGestureRef = useRef<ReaderWheelGesture>({
+    accumulatedDeltaX: 0,
+    hasNavigatedInSequence: false,
+    lastWheelAt: 0,
+    lastNavigationAt: 0
+  });
+  const lastToolbarHoverAt = useRef(0);
   const routeLocatorKey = routeKey(effectiveRouteLocator);
   const latestRouteLocator = useRef(effectiveRouteLocator);
   const hasToc = book.format === "txt" || book.format === "epub";
+  const controlsPinned = tocOpen || showBookmarks || showSettings || showAnnotations;
 
   useEffect(() => {
     latestRouteLocator.current = effectiveRouteLocator;
   }, [effectiveRouteLocator, routeLocatorKey]);
+
+  useEffect(() => {
+    controlsVisibleRef.current = controlsVisible;
+  }, [controlsVisible]);
+
+  useEffect(() => {
+    controlsPinnedRef.current = controlsPinned;
+  }, [controlsPinned]);
+
+  const bumpControlsActivity = useCallback(() => {
+    setControlsActivityKey((key) => key + 1);
+  }, []);
+
+  const showControls = useCallback(() => {
+    setControlsVisible(true);
+    bumpControlsActivity();
+  }, [bumpControlsActivity]);
+
+  const toggleControls = useCallback(() => {
+    if (controlsPinnedRef.current) {
+      showControls();
+      return;
+    }
+
+    setControlsVisible((visible) => !visible);
+    bumpControlsActivity();
+  }, [bumpControlsActivity, showControls]);
+
+  const setReaderContentRef = useCallback((element: HTMLDivElement | null) => {
+    contentRef.current = element;
+  }, []);
+
+  useEffect(() => {
+    if (controlsPinned) {
+      showControls();
+    }
+  }, [controlsPinned, showControls]);
+
+  useEffect(() => {
+    if (!settings || controlsPinned || !controlsVisible) {
+      return;
+    }
+
+    const delay = Math.max(1, settings.controlsAutoHideDelay) * 1000;
+    const timeout = window.setTimeout(() => setControlsVisible(false), delay);
+
+    return () => window.clearTimeout(timeout);
+  }, [controlsActivityKey, controlsPinned, controlsVisible, settings]);
+
+  useEffect(() => {
+    const handleReaderControlsToggle = () => {
+      toggleControls();
+    };
+
+    window.addEventListener(READER_CONTROLS_TOGGLE_EVENT, handleReaderControlsToggle);
+
+    return () => window.removeEventListener(READER_CONTROLS_TOGGLE_EVENT, handleReaderControlsToggle);
+  }, [toggleControls]);
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse" || event.clientY > TOOLBAR_HOVER_HEIGHT) {
+        return;
+      }
+
+      const now = Date.now();
+
+      if (now - lastToolbarHoverAt.current < 220) {
+        return;
+      }
+
+      lastToolbarHoverAt.current = now;
+      showControls();
+    };
+
+    const handleInputActivity = () => {
+      if (controlsVisibleRef.current || controlsPinnedRef.current) {
+        bumpControlsActivity();
+      }
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, { passive: true });
+    window.addEventListener("pointerdown", handleInputActivity, { passive: true });
+    window.addEventListener("keydown", handleInputActivity);
+    window.addEventListener("wheel", handleInputActivity, { passive: true });
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerdown", handleInputActivity);
+      window.removeEventListener("keydown", handleInputActivity);
+      window.removeEventListener("wheel", handleInputActivity);
+    };
+  }, [bumpControlsActivity, showControls]);
 
   useEffect(() => {
     bootRouteLocator.current = routeLocatorFromHash(book, BOOT_HASH);
@@ -307,6 +429,115 @@ export function ReaderView({
     [book.id, repository]
   );
 
+  const handleReaderPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const nativeEvent = event.nativeEvent;
+
+    if (
+      !isTouchLikePointer(nativeEvent) ||
+      !nativeEvent.isPrimary ||
+      nativeEvent.button !== 0 ||
+      shouldIgnoreReaderGestureTarget(event.target)
+    ) {
+      pointerGestureRef.current = undefined;
+      return;
+    }
+
+    pointerGestureRef.current = {
+      pointerId: nativeEvent.pointerId,
+      startX: nativeEvent.clientX,
+      startY: nativeEvent.clientY,
+      startedAt: Date.now(),
+      target: event.target
+    };
+
+    if (controlsVisibleRef.current || controlsPinnedRef.current) {
+      bumpControlsActivity();
+    }
+  }, [bumpControlsActivity]);
+
+  const handleReaderPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = pointerGestureRef.current;
+    const nativeEvent = event.nativeEvent;
+
+    if (!gesture || gesture.pointerId !== nativeEvent.pointerId) {
+      return;
+    }
+
+    pointerGestureRef.current = undefined;
+
+    if (
+      shouldIgnoreReaderGestureTarget(gesture.target) ||
+      shouldIgnoreReaderGestureTarget(event.target) ||
+      hasReadableSelection(document)
+    ) {
+      return;
+    }
+
+    const deltaX = nativeEvent.clientX - gesture.startX;
+    const deltaY = nativeEvent.clientY - gesture.startY;
+    const swipeDirection = directionFromSwipe(deltaX, deltaY);
+
+    if (swipeDirection) {
+      event.preventDefault();
+      bumpControlsActivity();
+      dispatchReaderNavigation(swipeDirection);
+      return;
+    }
+
+    if (!isTapGesture(deltaX, deltaY)) {
+      return;
+    }
+
+    const rect = contentRef.current?.getBoundingClientRect();
+    const width = rect?.width ?? window.innerWidth;
+    const tapX = nativeEvent.clientX - (rect?.left ?? 0);
+    const tapAction = directionFromTap(tapX, width);
+
+    if (tapAction === "toggle") {
+      event.preventDefault();
+      toggleControls();
+      return;
+    }
+
+    if (tapAction) {
+      event.preventDefault();
+      bumpControlsActivity();
+      dispatchReaderNavigation(tapAction);
+    }
+  }, [bumpControlsActivity, toggleControls]);
+
+  const handleReaderPointerCancel = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pointerGestureRef.current?.pointerId === event.nativeEvent.pointerId) {
+      pointerGestureRef.current = undefined;
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleReaderWheel = (event: WheelEvent) => {
+      if (!contentRef.current?.contains(event.target instanceof Node ? event.target : null)) {
+        return;
+      }
+
+      if (shouldIgnoreReaderGestureTarget(event.target) || !isHorizontalReaderWheel(event)) {
+        return;
+      }
+
+      event.preventDefault();
+      const direction = navigationDirectionFromWheel(event, wheelGestureRef.current);
+
+      if (!direction) {
+        return;
+      }
+
+      bumpControlsActivity();
+      dispatchReaderNavigation(direction);
+    };
+
+    window.addEventListener("wheel", handleReaderWheel, { capture: true, passive: false });
+
+    return () => window.removeEventListener("wheel", handleReaderWheel, { capture: true });
+  }, [bumpControlsActivity]);
+
   if (!file || !settings || !locator) {
     return (
       <main className="reader-shell loading">
@@ -319,7 +550,14 @@ export function ReaderView({
   }
 
   return (
-    <main className={`reader-shell theme-${settings.theme}`}>
+    <main
+      className={[
+        "reader-shell",
+        `theme-${settings.theme}`,
+        controlsVisible || controlsPinned ? "controls-visible" : "controls-hidden",
+        controlsPinned ? "controls-pinned" : ""
+      ].filter(Boolean).join(" ")}
+    >
       <div className="reader-top-title" title={book.title}>
         {book.title}
       </div>
@@ -400,7 +638,13 @@ export function ReaderView({
       </div>
 
       <section className="reader-workspace">
-        <div className="reader-content" ref={contentRef}>
+        <div
+          className="reader-content"
+          ref={setReaderContentRef}
+          onPointerCancel={handleReaderPointerCancel}
+          onPointerDown={handleReaderPointerDown}
+          onPointerUp={handleReaderPointerUp}
+        >
           <Suspense fallback={<p className="reader-loading">正在准备阅读器...</p>}>
             {book.format === "txt" ? (
               <TextReader

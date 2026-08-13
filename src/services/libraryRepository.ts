@@ -18,6 +18,7 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   lineHeight: 1.75,
   paragraphSpacing: 1,
   contentWidth: 720,
+  controlsAutoHideDelay: 3,
   replaceEpubCss: true
 };
 

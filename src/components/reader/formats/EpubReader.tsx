@@ -11,6 +11,22 @@ import {
 } from "./paginationLayout";
 import { applyEpubContentStyle } from "./epubCss";
 import {
+  directionFromSwipe,
+  directionFromTap,
+  dispatchReaderControlsToggle,
+  dispatchReaderNavigation,
+  hasReadableSelection,
+  isHorizontalReaderWheel,
+  isTapGesture,
+  isTouchLikePointer,
+  navigationDirectionFromWheel,
+  READER_NAVIGATION_EVENT,
+  shouldIgnoreReaderGestureTarget,
+  type ReaderNavigationDirection,
+  type ReaderPointerGesture,
+  type ReaderWheelGesture
+} from "../readerGestures";
+import {
   bindEpubFrameFocusPolling,
   bindEpubFrameFocusRestoration,
   bindEpubKeyboardNavigation
@@ -79,6 +95,8 @@ export function EpubReader({
   const progressRef = useRef<EpubProgress>({ percentage: 0 });
   const appliedIncomingLocatorKey = useRef(epubLocatorKey(initialEpubLocator));
   const reportedInternalLocatorKeys = useRef<Set<string>>(new Set());
+  const boundGestureDocuments = useRef<WeakSet<Document>>(new WeakSet());
+  const gestureCleanups = useRef<Array<() => void>>([]);
   const [toc, setToc] = useState<Array<EpubNavItem & { depth: number }>>([]);
   const [stageSize, setStageSize] = useState<StageSize>({ width: 0, height: 0 });
   const [turnDirection, setTurnDirection] = useState<"next" | "prev">();
@@ -315,6 +333,12 @@ export function EpubReader({
           bindEpubKeyboardNavigation(view.contents ?? { document }, handleReaderKeyDown, {
             restoreFocus: focusReaderKeyboardSurface
           });
+
+          if (!boundGestureDocuments.current.has(document)) {
+            boundGestureDocuments.current.add(document);
+            gestureCleanups.current.push(bindEpubTouchGestures(document));
+          }
+
           applyEpubContentStyle(document, settingsRef.current);
         });
 
@@ -376,6 +400,10 @@ export function EpubReader({
     return () => {
       isActive = false;
       window.clearTimeout(startTimer);
+      for (const cleanup of gestureCleanups.current.splice(0)) {
+        cleanup();
+      }
+      boundGestureDocuments.current = new WeakSet();
       renditionRef.current = null;
       bookRef.current = null;
       rendition?.destroy();
@@ -471,6 +499,24 @@ export function EpubReader({
     return () => window.removeEventListener("keydown", handleReaderKeyDown);
   }, [handleReaderKeyDown]);
 
+  useEffect(() => {
+    const handleReaderNavigation = (event: Event) => {
+      const direction = (event as CustomEvent<{ direction?: ReaderNavigationDirection }>).detail?.direction;
+
+      if (direction === "previous") {
+        goPrevious();
+      }
+
+      if (direction === "next") {
+        goNext();
+      }
+    };
+
+    window.addEventListener(READER_NAVIGATION_EVENT, handleReaderNavigation);
+
+    return () => window.removeEventListener(READER_NAVIGATION_EVENT, handleReaderNavigation);
+  }, [goNext, goPrevious]);
+
   const displayTocItem = (href: string) => {
     onTocOpenChange(false);
     void renditionRef.current?.display(href);
@@ -546,6 +592,111 @@ function applyEpubContentStylesToRendition(
       applyEpubContentStyle(contents.document, settings);
     }
   }
+}
+
+function bindEpubTouchGestures(ownerDocument: Document): () => void {
+  const wheelGesture: ReaderWheelGesture = {
+    accumulatedDeltaX: 0,
+    hasNavigatedInSequence: false,
+    lastWheelAt: 0,
+    lastNavigationAt: 0
+  };
+  let pointerGesture: ReaderPointerGesture | undefined;
+
+  const handlePointerDown = (event: PointerEvent) => {
+    if (
+      !isTouchLikePointer(event) ||
+      !event.isPrimary ||
+      event.button !== 0 ||
+      shouldIgnoreReaderGestureTarget(event.target)
+    ) {
+      pointerGesture = undefined;
+      return;
+    }
+
+    pointerGesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: Date.now(),
+      target: event.target
+    };
+  };
+
+  const handlePointerUp = (event: PointerEvent) => {
+    const gesture = pointerGesture;
+
+    if (!gesture || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+
+    pointerGesture = undefined;
+
+    if (shouldIgnoreReaderGestureTarget(gesture.target) || hasReadableSelection(ownerDocument)) {
+      return;
+    }
+
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    const swipeDirection = directionFromSwipe(deltaX, deltaY);
+
+    if (swipeDirection) {
+      event.preventDefault();
+      dispatchReaderNavigation(swipeDirection);
+      return;
+    }
+
+    if (!isTapGesture(deltaX, deltaY)) {
+      return;
+    }
+
+    const width = ownerDocument.defaultView?.innerWidth ?? ownerDocument.documentElement.clientWidth;
+    const tapAction = directionFromTap(event.clientX, width);
+
+    if (tapAction === "toggle") {
+      event.preventDefault();
+      dispatchReaderControlsToggle();
+      return;
+    }
+
+    if (tapAction) {
+      event.preventDefault();
+      dispatchReaderNavigation(tapAction);
+    }
+  };
+
+  const handlePointerCancel = (event: PointerEvent) => {
+    if (pointerGesture?.pointerId === event.pointerId) {
+      pointerGesture = undefined;
+    }
+  };
+
+  const handleWheel = (event: WheelEvent) => {
+    if (shouldIgnoreReaderGestureTarget(event.target) || !isHorizontalReaderWheel(event)) {
+      return;
+    }
+
+    event.preventDefault();
+    const direction = navigationDirectionFromWheel(event, wheelGesture);
+
+    if (!direction) {
+      return;
+    }
+
+    dispatchReaderNavigation(direction);
+  };
+
+  ownerDocument.addEventListener("pointerdown", handlePointerDown, { passive: true });
+  ownerDocument.addEventListener("pointerup", handlePointerUp);
+  ownerDocument.addEventListener("pointercancel", handlePointerCancel);
+  ownerDocument.addEventListener("wheel", handleWheel, { passive: false });
+
+  return () => {
+    ownerDocument.removeEventListener("pointerdown", handlePointerDown);
+    ownerDocument.removeEventListener("pointerup", handlePointerUp);
+    ownerDocument.removeEventListener("pointercancel", handlePointerCancel);
+    ownerDocument.removeEventListener("wheel", handleWheel);
+  };
 }
 
 function safePercentageFromCfi(book: EpubBookLike, cfi: string, fallback: number): number {

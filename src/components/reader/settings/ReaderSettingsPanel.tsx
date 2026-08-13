@@ -101,6 +101,18 @@ export function ReaderSettingsPanel({ settings, onChange }: ReaderSettingsPanelP
           onChange={(event) => update("contentWidth", Number(event.target.value))}
         />
       </label>
+
+      <label className="setting-row">
+        <span>顶部按钮自动隐藏 {settings.controlsAutoHideDelay}s</span>
+        <input
+          max={10}
+          min={1}
+          step={1}
+          type="range"
+          value={settings.controlsAutoHideDelay}
+          onChange={(event) => update("controlsAutoHideDelay", Number(event.target.value))}
+        />
+      </label>
     </aside>
   );
 }

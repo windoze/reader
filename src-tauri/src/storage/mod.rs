@@ -154,17 +154,20 @@ mod tests {
         let defaults = storage.get_settings().unwrap().unwrap();
 
         assert!(defaults.replace_epub_css);
+        assert_eq!(defaults.controls_auto_hide_delay, 3);
         assert!(storage.settings_path.exists());
 
         let settings = ReaderSettings {
             replace_epub_css: false,
             font_size: 20,
+            controls_auto_hide_delay: 5,
             ..defaults
         };
         storage.save_settings(settings).unwrap();
 
         let content = fs::read_to_string(&storage.settings_path).unwrap();
         assert!(content.contains("\"replaceEpubCss\": false"));
+        assert!(content.contains("\"controlsAutoHideDelay\": 5"));
 
         let reloaded = Storage::new_for_test(temp_dir.path())
             .unwrap()
@@ -173,6 +176,7 @@ mod tests {
             .unwrap();
         assert!(!reloaded.replace_epub_css);
         assert_eq!(reloaded.font_size, 20);
+        assert_eq!(reloaded.controls_auto_hide_delay, 5);
     }
 
     #[test]
@@ -193,6 +197,7 @@ mod tests {
         assert_eq!(migrated.font_family, "serif");
         assert_eq!(migrated.font_size, 19);
         assert!(migrated.replace_epub_css);
+        assert_eq!(migrated.controls_auto_hide_delay, 3);
         assert!(storage.settings_path.exists());
     }
 

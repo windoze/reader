@@ -91,6 +91,8 @@ pub struct ReaderSettings {
     pub paragraph_spacing: f64,
     #[serde(default = "default_content_width")]
     pub content_width: i64,
+    #[serde(default = "default_controls_auto_hide_delay")]
+    pub controls_auto_hide_delay: i64,
     #[serde(default = "default_replace_epub_css")]
     pub replace_epub_css: bool,
 }
@@ -104,6 +106,7 @@ impl Default for ReaderSettings {
             line_height: default_line_height(),
             paragraph_spacing: default_paragraph_spacing(),
             content_width: default_content_width(),
+            controls_auto_hide_delay: default_controls_auto_hide_delay(),
             replace_epub_css: default_replace_epub_css(),
         }
     }
@@ -190,6 +193,10 @@ fn default_paragraph_spacing() -> f64 {
 
 fn default_content_width() -> i64 {
     720
+}
+
+fn default_controls_auto_hide_delay() -> i64 {
+    3
 }
 
 fn default_replace_epub_css() -> bool {

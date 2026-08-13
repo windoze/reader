@@ -13,6 +13,7 @@ const settings: ReaderSettings = {
   lineHeight: 1.75,
   paragraphSpacing: 1,
   contentWidth: 720,
+  controlsAutoHideDelay: 3,
   replaceEpubCss: true
 };
 
@@ -24,6 +25,18 @@ describe("pagination layout", () => {
       .toBe(1);
     expect(buildPaginationLayout({ width: 1180, height: 520 }, settings, { minSheetHeight: 360 }).pageMode)
       .toBe(1);
+  });
+
+  it("keeps phone layouts single-page and constrains desktop spreads to the viewport", () => {
+    const phone = buildPaginationLayout({ width: 390, height: 844 }, settings, { minSheetHeight: 360 });
+    const portraitTablet = buildPaginationLayout({ width: 820, height: 1180 }, settings, { minSheetHeight: 360 });
+    const desktop = buildPaginationLayout({ width: 1280, height: 820 }, settings, { minSheetHeight: 360 });
+
+    expect(phone.pageMode).toBe(1);
+    expect(phone.sheetWidth).toBeLessThanOrEqual(390);
+    expect(portraitTablet.pageMode).toBe(1);
+    expect(desktop.pageMode).toBe(2);
+    expect(desktop.sheetWidth * 2 + desktop.pageGap).toBeLessThanOrEqual(1280);
   });
 
   it("keeps paragraph spacing in css variables and pagination fingerprints", () => {

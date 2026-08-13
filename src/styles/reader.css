@@ -9,6 +9,7 @@
   height: 100vh;
   min-height: 100vh;
   overflow: hidden;
+  overscroll-behavior: none;
   color: var(--reader-text);
   background: var(--reader-bg);
 }
@@ -62,6 +63,9 @@
   pointer-events: none;
   text-align: center;
   text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 160ms ease, visibility 160ms ease;
+  visibility: hidden;
   white-space: nowrap;
 }
 
@@ -77,9 +81,27 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--surface-bg) 68%, transparent);
   box-shadow: 0 8px 24px rgba(42, 33, 24, 0.12);
-  opacity: 0.34;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+  visibility: hidden;
   backdrop-filter: blur(18px);
-  transition: opacity 160ms ease, box-shadow 160ms ease;
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease, box-shadow 160ms ease;
+}
+
+.reader-shell.controls-visible .reader-top-title,
+.reader-shell.controls-pinned .reader-top-title {
+  opacity: 1;
+  visibility: visible;
+}
+
+.reader-shell.controls-visible .reader-floating-tools,
+.reader-shell.controls-pinned .reader-floating-tools,
+.reader-floating-tools:focus-within {
+  opacity: 0.96;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
 }
 
 .reader-floating-tools:hover,
@@ -172,6 +194,8 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: pan-y;
 }
 
 .reader-side-panel {
@@ -322,6 +346,8 @@
   overflow: hidden;
   height: 100%;
   padding: 38px clamp(6px, 1vw, 14px) 24px;
+  overscroll-behavior: none;
+  touch-action: pan-y;
 }
 
 .reader-keyboard-focus {
@@ -430,6 +456,7 @@
   color: color-mix(in srgb, var(--reader-muted) 72%, transparent);
   background: transparent;
   opacity: 0;
+  touch-action: manipulation;
   transition: opacity 160ms ease;
 }
 
@@ -482,6 +509,8 @@
   min-height: 0;
   overflow: hidden;
   padding: 38px 12px 24px;
+  overscroll-behavior: none;
+  touch-action: pan-y;
 }
 
 .pdf-controls,
@@ -766,8 +795,9 @@
 }
 
 @media (max-width: 620px) {
-  .reader-floating-tools {
-    opacity: 0.72;
+  .reader-shell.controls-visible .reader-floating-tools,
+  .reader-shell.controls-pinned .reader-floating-tools {
+    opacity: 0.96;
   }
 
   .reader-top-title {

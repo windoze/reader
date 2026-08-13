@@ -11,6 +11,7 @@ const settings: ReaderSettings = {
   lineHeight: 1.7,
   paragraphSpacing: 1,
   contentWidth: 640,
+  controlsAutoHideDelay: 3,
   replaceEpubCss: true
 };
 

@@ -19,6 +19,7 @@ import {
   paginationCssVariables,
   paginationFingerprint
 } from "./paginationLayout";
+import { READER_NAVIGATION_EVENT, type ReaderNavigationDirection } from "../readerGestures";
 import {
   pageIndexForOffset,
   paginateTextBlocks,
@@ -507,6 +508,24 @@ export function TextReader({
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [goNext, goPrevious]);
+
+  useEffect(() => {
+    const handleReaderNavigation = (event: Event) => {
+      const direction = (event as CustomEvent<{ direction?: ReaderNavigationDirection }>).detail?.direction;
+
+      if (direction === "previous") {
+        goPrevious();
+      }
+
+      if (direction === "next") {
+        goNext();
+      }
+    };
+
+    window.addEventListener(READER_NAVIGATION_EVENT, handleReaderNavigation);
+
+    return () => window.removeEventListener(READER_NAVIGATION_EVENT, handleReaderNavigation);
   }, [goNext, goPrevious]);
 
   if (!loadedText) {
