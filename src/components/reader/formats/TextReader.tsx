@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -38,12 +38,35 @@ interface TextReaderProps {
   onSelection(selection: SelectionDraft): void;
   tocOpen: boolean;
   onTocOpenChange(open: boolean): void;
+  searchOpen?: boolean;
+  onSearchOpenChange?(open: boolean): void;
 }
 
 interface StageSize {
   width: number;
   height: number;
 }
+
+interface SearchableChapter {
+  chapter: TextChapter;
+  blocks: TextPageBlock[];
+}
+
+interface TextSearchResult {
+  chapterId: string;
+  chapterTitle: string;
+  offset: number;
+  before: string;
+  match: string;
+  after: string;
+  prefixEllipsis: boolean;
+  suffixEllipsis: boolean;
+}
+
+const SEARCH_DEBOUNCE_MS = 300;
+const SEARCH_CONTEXT_LENGTH = 10;
+const SEARCH_FULL_PARAGRAPH_LIMIT = 80;
+const SEARCH_RESULT_LIMIT = 200;
 
 export function TextReader({
   bookId,
@@ -56,7 +79,9 @@ export function TextReader({
   onExcerptChange,
   onSelection,
   tocOpen,
-  onTocOpenChange
+  onTocOpenChange,
+  searchOpen = false,
+  onSearchOpenChange
 }: TextReaderProps) {
   const [loadedText, setLoadedText] = useState(file.textContent);
   const [stageSize, setStageSize] = useState<StageSize>({ width: 0, height: 0 });
@@ -65,7 +90,11 @@ export function TextReader({
   const [isInitialPageSettled, setIsInitialPageSettled] = useState(false);
   const [pendingLastPage, setPendingLastPage] = useState(false);
   const [turnDirection, setTurnDirection] = useState<"next" | "prev">();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<TextSearchResult[]>([]);
+  const [hasSearchRun, setHasSearchRun] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const restoredInitialPage = useRef(false);
   const anchorLocatorRef = useRef(
@@ -152,25 +181,72 @@ export function TextReader({
   );
   const pageMode = paginationLayout.pageMode;
   const paginationKey = paginationFingerprint(settings, paginationLayout);
+  const storedTextBlocks = useMemo<Map<string, TextPageBlock[]>>(
+    () => new Map((file.textBlocks ?? []).map((chapterBlocks) => [chapterBlocks.chapterId, chapterBlocks.blocks])),
+    [file.textBlocks]
+  );
 
   const blocks = useMemo<TextPageBlock[]>(() => {
     if (!activeChapter) {
       return [];
     }
 
-    const derivedBlocks = file.textBlocks?.find((chapterBlocks) => chapterBlocks.chapterId === activeChapter.id);
+    const derivedBlocks = storedTextBlocks.get(activeChapter.id);
 
-    return derivedBlocks?.blocks ?? buildChapterBlocks(
+    return derivedBlocks ?? buildChapterBlocks(
       activeChapter,
       text.slice(activeChapter.start, activeChapter.end)
     );
-  }, [activeChapter, file.textBlocks, text]);
+  }, [activeChapter, storedTextBlocks, text]);
+
+  const searchableChapters = useMemo<SearchableChapter[]>(
+    () => chapters.map((chapter) => ({
+      chapter,
+      blocks: storedTextBlocks.get(chapter.id) ?? buildChapterBlocks(
+        chapter,
+        text.slice(chapter.start, chapter.end)
+      )
+    })),
+    [chapters, storedTextBlocks, text]
+  );
+
+  const trimmedSearchQuery = searchQuery.trim();
+  const shouldShowSearchResults = trimmedSearchQuery.length > 0 && hasSearchRun;
 
   useEffect(() => {
     if (!activeChapterId && firstReadableChapter) {
       setActiveChapterId(firstReadableChapter.id);
     }
   }, [activeChapterId, firstReadableChapter]);
+
+  useEffect(() => {
+    if (!searchOpen) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => searchInputRef.current?.focus(), 0);
+    return () => window.clearTimeout(timeout);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+
+    if (!query) {
+      setSearchResults([]);
+      setHasSearchRun(false);
+      return;
+    }
+
+    setSearchResults([]);
+    setHasSearchRun(false);
+
+    const timeout = window.setTimeout(() => {
+      setSearchResults(findTextSearchResults(searchableChapters, query));
+      setHasSearchRun(true);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [searchQuery, searchableChapters]);
 
   useEffect(() => {
     if (!incomingTxtChapterId || !chapters.some((chapter) => chapter.id === incomingTxtChapterId)) {
@@ -434,6 +510,40 @@ export function TextReader({
     onTocOpenChange(false);
   };
 
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setHasSearchRun(false);
+    searchInputRef.current?.focus();
+  };
+
+  const selectSearchResult = (result: TextSearchResult) => {
+    ignoreCurrentIncomingLocator();
+    anchorLocatorRef.current = {
+      chapterId: result.chapterId,
+      offset: result.offset
+    };
+    setPendingLastPage(false);
+    onTocOpenChange(false);
+    onSearchOpenChange?.(false);
+
+    if (activeChapter?.id === result.chapterId && pages.length > 0) {
+      restoredInitialPage.current = true;
+      setPageIndex(normalizePageStart(
+        pageIndexForOffset(pages, result.offset),
+        pages.length,
+        pageMode
+      ));
+      setIsInitialPageSettled(true);
+      return;
+    }
+
+    restoredInitialPage.current = false;
+    setIsInitialPageSettled(false);
+    setActiveChapterId(result.chapterId);
+    setPageIndex(0);
+  };
+
   const goToPage = useCallback((nextPage: number) => {
     ignoreCurrentIncomingLocator();
     anchorLocatorRef.current = undefined;
@@ -559,6 +669,60 @@ export function TextReader({
         </nav>
       </aside>
 
+      {searchOpen ? (
+        <aside
+          className={shouldShowSearchResults ? "reader-search-panel expanded" : "reader-search-panel"}
+          aria-label="查找"
+          data-reader-search-panel
+          id="reader-search-panel"
+        >
+          <div className="reader-search-input-wrap">
+            <input
+              aria-label="查找"
+              className="reader-search-input"
+              placeholder="查找"
+              ref={searchInputRef}
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+            <button
+              aria-label="清空查找"
+              className="reader-search-clear"
+              disabled={!searchQuery}
+              title="清空"
+              type="button"
+              onClick={clearSearch}
+            >
+              <X size={16} aria-hidden />
+            </button>
+          </div>
+
+          {shouldShowSearchResults ? (
+            searchResults.length > 0 ? (
+              <div className="reader-search-results">
+                {searchResults.map((result, index) => (
+                  <button
+                    className="reader-search-result"
+                    key={`${result.chapterId}-${result.offset}-${index}`}
+                    title={result.chapterTitle}
+                    type="button"
+                    onClick={() => selectSearchResult(result)}
+                  >
+                    {renderSearchSnippet(result)}
+                  </button>
+                ))}
+                {searchResults.length >= SEARCH_RESULT_LIMIT ? (
+                  <p className="reader-search-note">仅显示前 {SEARCH_RESULT_LIMIT} 条结果</p>
+                ) : null}
+              </div>
+            ) : (
+              <p className="reader-search-empty">未找到匹配内容</p>
+            )
+          ) : null}
+        </aside>
+      ) : null}
+
       <section
         className="paginated-stage"
         ref={stageRef}
@@ -621,6 +785,67 @@ function renderPageBlock(block: TextPageBlock, index: number) {
   }
 
   return <p key={`${block.start}-${index}`}>{block.text}</p>;
+}
+
+function renderSearchSnippet(result: TextSearchResult) {
+  return (
+    <span className="reader-search-snippet">
+      {result.prefixEllipsis ? "..." : ""}
+      {result.before}
+      <mark>{result.match}</mark>
+      {result.after}
+      {result.suffixEllipsis ? "..." : ""}
+    </span>
+  );
+}
+
+function findTextSearchResults(chapters: SearchableChapter[], query: string): TextSearchResult[] {
+  const results: TextSearchResult[] = [];
+
+  for (const { chapter, blocks } of chapters) {
+    for (const block of blocks) {
+      if (block.kind !== "paragraph") {
+        continue;
+      }
+
+      let fromIndex = 0;
+
+      while (results.length < SEARCH_RESULT_LIMIT) {
+        const matchIndex = block.text.indexOf(query, fromIndex);
+
+        if (matchIndex === -1) {
+          break;
+        }
+
+        const useFullParagraph = block.text.length <= SEARCH_FULL_PARAGRAPH_LIMIT;
+        const snippetStart = useFullParagraph
+          ? 0
+          : Math.max(0, matchIndex - SEARCH_CONTEXT_LENGTH);
+        const snippetEnd = useFullParagraph
+          ? block.text.length
+          : Math.min(block.text.length, matchIndex + query.length + SEARCH_CONTEXT_LENGTH);
+
+        results.push({
+          chapterId: chapter.id,
+          chapterTitle: chapter.title,
+          offset: block.start + matchIndex,
+          before: block.text.slice(snippetStart, matchIndex),
+          match: block.text.slice(matchIndex, matchIndex + query.length),
+          after: block.text.slice(matchIndex + query.length, snippetEnd),
+          prefixEllipsis: snippetStart > 0,
+          suffixEllipsis: snippetEnd < block.text.length
+        });
+
+        fromIndex = matchIndex + Math.max(query.length, 1);
+      }
+
+      if (results.length >= SEARCH_RESULT_LIMIT) {
+        return results;
+      }
+    }
+  }
+
+  return results;
 }
 
 function normalizePageStart(page: number, totalPages: number, pageMode: number): number {

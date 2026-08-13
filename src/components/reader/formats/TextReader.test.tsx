@@ -151,6 +151,56 @@ describe("TextReader pagination", () => {
 
     await waitFor(() => expect(pageTotal()).toBeGreaterThan(1));
   });
+
+  it("searches after a pause and jumps to the selected match", async () => {
+    const { file } = makeBookFile();
+    const locators: ReaderLocator[] = [];
+    const onSearchOpenChange = vi.fn();
+
+    render(
+      <TextReader
+        bookId="book-1"
+        file={file}
+        initialLocator={{
+          kind: "txt",
+          chapterId: "chapter-1",
+          offset: 0,
+          percentage: 0
+        }}
+        layoutCache={emptyLayoutCache}
+        settings={settings}
+        searchOpen
+        tocOpen={false}
+        onChapterTitleChange={() => undefined}
+        onExcerptChange={() => undefined}
+        onLocatorChange={(locator) => locators.push(locator)}
+        onSearchOpenChange={onSearchOpenChange}
+        onSelection={() => undefined}
+        onTocOpenChange={() => undefined}
+      />
+    );
+
+    await screen.findByRole("heading", { name: "第一章" });
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "查找" }), {
+      target: { value: "第二章正文" }
+    });
+
+    const result = await screen.findByRole("button", { name: /第二章正文/ });
+    fireEvent.click(result);
+
+    await screen.findByRole("heading", { name: "第二章" });
+    await waitFor(() => {
+      const lastLocator = locators.at(-1);
+
+      expect(lastLocator).toMatchObject({
+        kind: "txt",
+        chapterId: "chapter-2"
+      });
+      expect(lastLocator?.kind === "txt" ? lastLocator.offset : 0).toBeGreaterThan(0);
+    });
+    expect(onSearchOpenChange).toHaveBeenCalledWith(false);
+  });
 });
 
 function makeBookFile(): { file: StoredBookFile; chapters: TextChapter[] } {

@@ -1,4 +1,4 @@
-import { ArrowLeft, Highlighter, ListTree, Settings } from "lucide-react";
+import { ArrowLeft, Highlighter, ListTree, Search, Settings } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type {
@@ -77,11 +77,13 @@ export function ReaderView({
   const [showSettings, setShowSettings] = useState(false);
   const [showAnnotations, setShowAnnotations] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [error, setError] = useState<string>();
   const [controlsVisible, setControlsVisible] = useState(true);
   const [controlsActivityKey, setControlsActivityKey] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const tocButtonRef = useRef<HTMLButtonElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const annotationsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
@@ -99,7 +101,8 @@ export function ReaderView({
   const routeLocatorKey = routeKey(effectiveRouteLocator);
   const latestRouteLocator = useRef(effectiveRouteLocator);
   const hasToc = book.format === "txt" || book.format === "epub";
-  const controlsPinned = tocOpen || showBookmarks || showSettings || showAnnotations;
+  const hasSearch = book.format === "txt";
+  const controlsPinned = tocOpen || searchOpen || showBookmarks || showSettings || showAnnotations;
 
   useEffect(() => {
     latestRouteLocator.current = effectiveRouteLocator;
@@ -209,6 +212,7 @@ export function ReaderView({
     setShowSettings(false);
     setShowAnnotations(false);
     setTocOpen(false);
+    setSearchOpen(false);
     setError(undefined);
 
     async function load() {
@@ -260,7 +264,7 @@ export function ReaderView({
   }, [book.format, effectiveRouteLocator, routeLocatorKey]);
 
   useEffect(() => {
-    if (!tocOpen && !showBookmarks && !showSettings && !showAnnotations) {
+    if (!tocOpen && !searchOpen && !showBookmarks && !showSettings && !showAnnotations) {
       return;
     }
 
@@ -272,10 +276,15 @@ export function ReaderView({
       }
 
       const tocPanel = document.querySelector("[data-reader-toc-panel]");
+      const searchPanel = document.querySelector("[data-reader-search-panel]");
       const bookmarkMenu = document.querySelector("[data-reader-bookmark-menu]");
 
       if (tocOpen && !tocPanel?.contains(target) && !tocButtonRef.current?.contains(target)) {
         setTocOpen(false);
+      }
+
+      if (searchOpen && !searchPanel?.contains(target) && !searchButtonRef.current?.contains(target)) {
+        setSearchOpen(false);
       }
 
       if (showBookmarks && !bookmarkMenu?.contains(target)) {
@@ -303,6 +312,7 @@ export function ReaderView({
       window.setTimeout(() => {
         if (document.activeElement instanceof HTMLIFrameElement) {
           setTocOpen(false);
+          setSearchOpen(false);
           setShowBookmarks(false);
           setShowSettings(false);
           setShowAnnotations(false);
@@ -317,7 +327,7 @@ export function ReaderView({
       document.removeEventListener("pointerdown", handlePointerDown, true);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [showAnnotations, showBookmarks, showSettings, tocOpen]);
+  }, [searchOpen, showAnnotations, showBookmarks, showSettings, tocOpen]);
 
   const persistLocator = useCallback(
     (nextLocator: ReaderLocator) => {
@@ -384,6 +394,7 @@ export function ReaderView({
       setShowAnnotations(false);
       setShowSettings(false);
       setTocOpen(false);
+      setSearchOpen(false);
       setLocator(bookmark.locator);
       onLocatorUrlChange(bookmark.locator);
       void repository.saveProgress({
@@ -578,10 +589,30 @@ export function ReaderView({
               setShowAnnotations(false);
               setShowBookmarks(false);
               setShowSettings(false);
+              setSearchOpen(false);
               setTocOpen((value) => !value);
             }}
           >
             <ListTree size={20} aria-hidden />
+          </button>
+        ) : null}
+        {hasSearch ? (
+          <button
+            className={searchOpen ? "icon-button active" : "icon-button"}
+            aria-controls="reader-search-panel"
+            aria-expanded={searchOpen}
+            ref={searchButtonRef}
+            title="查找"
+            type="button"
+            onClick={() => {
+              setShowAnnotations(false);
+              setShowBookmarks(false);
+              setShowSettings(false);
+              setTocOpen(false);
+              setSearchOpen((value) => !value);
+            }}
+          >
+            <Search size={20} aria-hidden />
           </button>
         ) : null}
       </div>
@@ -598,6 +629,7 @@ export function ReaderView({
               setShowAnnotations(false);
               setShowSettings(false);
               setTocOpen(false);
+              setSearchOpen(false);
             }
           }}
           onRemoveBookmark={handleRemoveBookmark}
@@ -614,6 +646,7 @@ export function ReaderView({
             setShowBookmarks(false);
             setShowSettings(false);
             setTocOpen(false);
+            setSearchOpen(false);
             setShowAnnotations((value) => !value);
           }}
         >
@@ -630,6 +663,7 @@ export function ReaderView({
             setShowAnnotations(false);
             setShowBookmarks(false);
             setTocOpen(false);
+            setSearchOpen(false);
             setShowSettings((value) => !value);
           }}
         >
@@ -659,6 +693,8 @@ export function ReaderView({
                 onSelection={setSelection}
                 tocOpen={tocOpen}
                 onTocOpenChange={setTocOpen}
+                searchOpen={searchOpen}
+                onSearchOpenChange={setSearchOpen}
               />
             ) : null}
             {book.format === "pdf" ? (

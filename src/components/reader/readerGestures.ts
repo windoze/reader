@@ -28,6 +28,7 @@ const IGNORED_GESTURE_SELECTOR = [
   ".reader-floating-panel",
   ".reader-side-panel",
   ".chapter-panel",
+  ".reader-search-panel",
   ".bookmark-popover",
   ".selection-annotator"
 ].join(",");
