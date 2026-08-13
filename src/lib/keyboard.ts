@@ -3,7 +3,7 @@ export function shouldHandleReaderNavigationKey(event: KeyboardEvent): boolean {
     return false;
   }
 
-  if (!["ArrowLeft", "ArrowRight", " "].includes(event.key)) {
+  if (!["ArrowLeft", "ArrowRight", "Left", "Right", " ", "Space", "Spacebar", "space"].includes(event.key)) {
     return false;
   }
 

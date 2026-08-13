@@ -11,6 +11,11 @@ import {
 } from "./paginationLayout";
 import { applyEpubContentStyle } from "./epubCss";
 import {
+  bindEpubFrameFocusPolling,
+  bindEpubFrameFocusRestoration,
+  bindEpubKeyboardNavigation
+} from "./epubKeyboard";
+import {
   epubLocatorKey,
   flattenToc,
   resolveInitialEpubTarget,
@@ -46,9 +51,6 @@ interface EpubProgress {
   percentage: number;
 }
 
-type EpubKeyboardHandler = (event: KeyboardEvent) => void;
-const epubKeyboardHandlers = new WeakMap<Document, EpubKeyboardHandler>();
-
 export function EpubReader({
   file,
   initialLocator,
@@ -60,6 +62,7 @@ export function EpubReader({
   onTocOpenChange
 }: EpubReaderProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const keyboardFocusRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<EpubBookLike | null>(null);
   const renditionRef = useRef<EpubRenditionLike | null>(null);
@@ -68,6 +71,7 @@ export function EpubReader({
   const initialChapterId = useRef(initialEpubLocator?.chapterId);
   const initialOffset = useRef(initialEpubLocator?.offset ?? 0);
   const latestCfi = useRef(initialCfi.current);
+  const lastNavigationKey = useRef({ key: "", handledAt: 0 });
   const settingsRef = useRef(settings);
   const onLocatorChangeRef = useRef(onLocatorChange);
   const onChapterTitleChangeRef = useRef(onChapterTitleChange);
@@ -90,23 +94,44 @@ export function EpubReader({
   const incomingEpubLocator = initialLocator.kind === "epub" ? initialLocator : undefined;
   const incomingEpubLocatorKey = epubLocatorKey(incomingEpubLocator);
 
+  const focusReaderKeyboardSurface = useCallback(() => {
+    keyboardFocusRef.current?.focus({ preventScroll: true });
+  }, []);
+
   const handleReaderKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (!shouldHandleReaderNavigationKey(event)) {
-        return;
+        return false;
       }
 
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
+      const key = normalizeNavigationKey(event.key);
+      const now = Date.now();
+
+      if (lastNavigationKey.current.key === key && now - lastNavigationKey.current.handledAt < 220) {
+        consumeReaderNavigationEvent(event);
+        return true;
+      }
+
+      lastNavigationKey.current = {
+        key,
+        handledAt: now
+      };
+
+      if (key === "ArrowLeft") {
+        consumeReaderNavigationEvent(event);
         setTurnDirection("prev");
         void renditionRef.current?.prev();
+        return true;
       }
 
-      if (event.key === "ArrowRight" || event.key === " ") {
-        event.preventDefault();
+      if (key === "ArrowRight" || key === " ") {
+        consumeReaderNavigationEvent(event);
         setTurnDirection("next");
         void renditionRef.current?.next();
+        return true;
       }
+
+      return false;
     },
     []
   );
@@ -174,6 +199,15 @@ export function EpubReader({
         bookRef.current = book;
         renditionRef.current = rendition;
         applyEpubTheme(rendition, settingsRef.current);
+        rendition.on("keydown", (eventValue) => {
+          handleReaderKeyDown(eventValue as KeyboardEvent);
+        });
+        rendition.on("keyup", (eventValue) => {
+          handleReaderKeyDown(eventValue as KeyboardEvent);
+        });
+        rendition.on("keypressed", (eventValue) => {
+          handleReaderKeyDown(eventValue as KeyboardEvent);
+        });
 
         book.loaded?.navigation
           ?.then((navigation) => {
@@ -278,14 +312,9 @@ export function EpubReader({
             return;
           }
 
-          const previousHandler = epubKeyboardHandlers.get(document);
-
-          if (previousHandler) {
-            document.removeEventListener("keydown", previousHandler);
-          }
-
-          document.addEventListener("keydown", handleReaderKeyDown);
-          epubKeyboardHandlers.set(document, handleReaderKeyDown);
+          bindEpubKeyboardNavigation(view.contents ?? { document }, handleReaderKeyDown, {
+            restoreFocus: focusReaderKeyboardSurface
+          });
           applyEpubContentStyle(document, settingsRef.current);
         });
 
@@ -307,6 +336,7 @@ export function EpubReader({
             }
 
             await rendition!.display(target);
+            window.setTimeout(focusReaderKeyboardSurface, 0);
 
             void book!.locations
               .generate(1200)
@@ -352,7 +382,7 @@ export function EpubReader({
       book?.destroy();
       host.replaceChildren();
     };
-  }, [file.blob, handleReaderKeyDown, pageMode, settings.replaceEpubCss, stageReady]);
+  }, [file.blob, focusReaderKeyboardSurface, handleReaderKeyDown, pageMode, settings.replaceEpubCss, stageReady]);
 
   useEffect(() => {
     if (renditionRef.current) {
@@ -360,6 +390,26 @@ export function EpubReader({
       applyEpubContentStylesToRendition(renditionRef.current, settings);
     }
   }, [settings]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+
+    if (!host) {
+      return;
+    }
+
+    return bindEpubFrameFocusRestoration(host, focusReaderKeyboardSurface);
+  }, [focusReaderKeyboardSurface, stageReady]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+
+    if (!host) {
+      return;
+    }
+
+    return bindEpubFrameFocusPolling(host, focusReaderKeyboardSurface);
+  }, [focusReaderKeyboardSurface, stageReady]);
 
   useEffect(() => {
     const book = bookRef.current;
@@ -463,8 +513,15 @@ export function EpubReader({
         } as CSSProperties}
       >
         <div
+          aria-label="阅读键盘导航"
+          className="reader-keyboard-focus"
+          ref={keyboardFocusRef}
+          tabIndex={0}
+        />
+        <div
           className={`reader-surface epub-reader book-page-shell pages-${pageMode}${turnDirection ? ` turn-${turnDirection}` : ""}`}
           ref={hostRef}
+          tabIndex={-1}
         />
 
         <button className="page-turn-zone previous" title="上一页" type="button" onClick={goPrevious}>
@@ -498,6 +555,24 @@ function safePercentageFromCfi(book: EpubBookLike, cfi: string, fallback: number
   } catch {
     return fallback;
   }
+}
+
+function normalizeNavigationKey(key: string): string {
+  if (key === "Left") {
+    return "ArrowLeft";
+  }
+
+  if (key === "Right") {
+    return "ArrowRight";
+  }
+
+  return key === "Space" || key === "Spacebar" || key === "space" ? " " : key;
+}
+
+function consumeReaderNavigationEvent(event: KeyboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation?.();
 }
 
 function applyEpubTheme(rendition: EpubRenditionLike, settings: ReaderSettings): void {
