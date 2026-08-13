@@ -21,6 +21,8 @@ interface PaginationLayoutOptions {
 
 const PAGE_GAP = 24;
 const DESKTOP_SHEET_WIDTH_TARGET = 860;
+const DESKTOP_STAGE_VERTICAL_PADDING = 62;
+const PHONE_STAGE_VERTICAL_PADDING = 80;
 const TEXT_PAGINATION_VERSION = "txt-layout-v2";
 
 export function buildPaginationLayout(
@@ -34,6 +36,12 @@ export function buildPaginationLayout(
   const pagePaddingX = width < 620 ? 24 : 38;
   const pagePaddingY = options.pagePaddingY ?? (height < 620 ? 24 : 34);
   const outerPadding = width < 620 ? 12 : 16;
+  const stageVerticalPadding = width < 620 ? PHONE_STAGE_VERTICAL_PADDING : DESKTOP_STAGE_VERTICAL_PADDING;
+  const availableSheetHeight = Math.max(1, Math.floor(height - stageVerticalPadding));
+  const sheetHeight = Math.min(
+    Math.max(options.minSheetHeight, availableSheetHeight),
+    availableSheetHeight
+  );
   const maxSheetWidth = settings.contentWidth + pagePaddingX * 2;
   const availableWidth = Math.max(320, width - outerPadding);
   const expandedSheetWidth = Math.max(
@@ -50,7 +58,7 @@ export function buildPaginationLayout(
     pagePaddingX,
     pagePaddingY,
     sheetWidth: Math.floor(sheetWidth),
-    sheetHeight: Math.max(options.minSheetHeight, Math.floor(height - 52))
+    sheetHeight
   };
 }
 

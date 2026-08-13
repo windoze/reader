@@ -6,8 +6,9 @@
   display: grid;
   grid-template-rows: 1fr;
   position: relative;
-  height: 100vh;
-  min-height: 100vh;
+  height: var(--app-viewport-height);
+  max-height: var(--app-viewport-height);
+  min-height: var(--app-viewport-height);
   overflow: hidden;
   overscroll-behavior: none;
   color: var(--reader-text);
@@ -200,7 +201,7 @@
 
 .reader-side-panel {
   width: min(340px, 36vw);
-  max-height: calc(100vh - 76px);
+  max-height: calc(var(--app-viewport-height) - 76px);
   overflow: auto;
   padding: 20px;
   border: 1px solid rgba(120, 105, 85, 0.16);

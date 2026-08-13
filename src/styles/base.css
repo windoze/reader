@@ -1,4 +1,5 @@
 :root {
+  --app-viewport-height: 100vh;
   color-scheme: light;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
   background: #f3f0ea;
@@ -9,16 +10,34 @@
   overscroll-behavior-x: none;
 }
 
+@supports (height: 100dvh) {
+  :root {
+    --app-viewport-height: 100dvh;
+  }
+}
+
 * {
   box-sizing: border-box;
+}
+
+html {
+  min-height: var(--app-viewport-height);
 }
 
 body {
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
+  min-height: var(--app-viewport-height);
   overflow-x: hidden;
   overscroll-behavior-x: none;
+}
+
+html.reader-active,
+body.reader-active,
+body.reader-active #root {
+  height: var(--app-viewport-height);
+  min-height: 0;
+  overflow: hidden;
 }
 
 button,
@@ -38,7 +57,7 @@ button:disabled {
 }
 
 #root {
-  min-height: 100vh;
+  min-height: var(--app-viewport-height);
 }
 
 .new-group-form input,

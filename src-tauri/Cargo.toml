@@ -16,6 +16,7 @@ uuid = { version = "1", features = ["v4"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+tauri-plugin = { version = "2", features = ["build"] }
 
 [lib]
 name = "reader_lib"

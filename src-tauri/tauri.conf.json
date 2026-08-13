@@ -28,6 +28,10 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all"
+    "targets": "all",
+    "iOS": {
+      "developmentTeam": "T872HYBE3E",
+      "infoPlist": "Info.ios.plist"
+    }
   }
 }

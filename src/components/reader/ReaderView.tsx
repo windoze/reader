@@ -574,6 +574,7 @@ export function ReaderView({
         controlsVisible || controlsPinned ? "controls-visible" : "controls-hidden",
         controlsPinned ? "controls-pinned" : ""
       ].filter(Boolean).join(" ")}
+      onContextMenu={(event) => event.preventDefault()}
     >
       <div className="reader-top-title" title={book.title}>
         {book.title}

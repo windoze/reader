@@ -1,11 +1,17 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { getDocument, TextLayer, type PDFDocumentProxy, type RenderTask } from "pdfjs-dist";
 import type { ReaderLocator, ReaderSettings, StoredBookFile } from "../../../domain/types";
 import { shouldHandleReaderNavigationKey } from "../../../lib/keyboard";
 import { ensurePdfWorker } from "../../../services/pdfWorker";
 import type { SelectionDraft } from "../annotations/SelectionAnnotator";
+import { showReaderContextMenu } from "../readerContextMenu";
 import { READER_NAVIGATION_EVENT, type ReaderNavigationDirection } from "../readerGestures";
+import {
+  menuPositionFromContextMenuEvent,
+  selectionContextFromContextMenuEvent
+} from "../selectionContext";
 
 interface PdfReaderProps {
   file: StoredBookFile;
@@ -207,44 +213,38 @@ export function PdfReader({
     });
   }, [onLocatorChange, pageNumber, pdf]);
 
-  useEffect(() => {
+  const handleContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
     const stage = stageRef.current;
 
     if (!stage) {
       return;
     }
 
-    const handleSelection = () => {
-      const selection = document.getSelection();
-      const selectedText = selection?.toString().trim();
+    const context = selectionContextFromContextMenuEvent(event.nativeEvent, stage);
 
-      if (!selection || !selectedText || selectedText.length < 2) {
-        return;
+    if (!context) {
+      return;
+    }
+
+    const target = event.target instanceof Node ? event.target : null;
+    const selectionPage = pageNumberFromNode(context.range.startContainer) ??
+      pageNumberFromNode(target) ??
+      pageNumber;
+    const draft: SelectionDraft = {
+      text: context.text.slice(0, 600),
+      locator: {
+        kind: "pdf",
+        page: selectionPage,
+        percentage: pdf?.numPages ? (selectionPage - 1) / pdf.numPages : 0
       }
-
-      if (selection.anchorNode && !stage.contains(selection.anchorNode)) {
-        return;
-      }
-
-      const selectionPage = pageNumberFromNode(selection.anchorNode) ?? pageNumber;
-
-      onSelection({
-        text: selectedText.slice(0, 600),
-        locator: {
-          kind: "pdf",
-          page: selectionPage,
-          percentage: pdf?.numPages ? (selectionPage - 1) / pdf.numPages : 0
-        }
-      });
     };
 
-    stage.addEventListener("mouseup", handleSelection);
-    stage.addEventListener("keyup", handleSelection);
-
-    return () => {
-      stage.removeEventListener("mouseup", handleSelection);
-      stage.removeEventListener("keyup", handleSelection);
-    };
+    void showReaderContextMenu({
+      position: menuPositionFromContextMenuEvent(event.nativeEvent),
+      onAddNote: () => onSelection(draft)
+    });
   }, [onSelection, pageNumber, pdf?.numPages]);
 
   useEffect(() => {
@@ -296,7 +296,7 @@ export function PdfReader({
   }
 
   return (
-    <div className="pdf-reader" ref={stageRef}>
+    <div className="pdf-reader" ref={stageRef} onContextMenu={handleContextMenu}>
       <div className={`pdf-spread pages-${pageMode}${turnDirection ? ` turn-${turnDirection}` : ""}`}>
         {visiblePages.map((visiblePage, index) => (
           <PdfPageCanvas

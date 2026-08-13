@@ -5,6 +5,7 @@ import ePub from "epubjs";
 import type { ReaderLocator, ReaderSettings, StoredBookFile } from "../../../domain/types";
 import { shouldHandleReaderNavigationKey } from "../../../lib/keyboard";
 import type { SelectionDraft } from "../annotations/SelectionAnnotator";
+import { showReaderContextMenu } from "../readerContextMenu";
 import {
   buildPaginationLayout,
   paginationCssVariables
@@ -26,6 +27,10 @@ import {
   type ReaderPointerGesture,
   type ReaderWheelGesture
 } from "../readerGestures";
+import {
+  menuPositionFromContextMenuEvent,
+  selectionContextFromContextMenuEvent
+} from "../selectionContext";
 import {
   bindEpubFrameFocusPolling,
   bindEpubFrameFocusRestoration,
@@ -297,31 +302,6 @@ export function EpubReader({
           onChapterTitleChangeRef.current(chapterId ?? "当前位置");
         });
 
-        rendition.on("selected", (cfiRangeValue, contentsValue) => {
-          const cfiRange = String(cfiRangeValue);
-          const contents = contentsValue as EpubContents;
-          const selectedText = contents.window?.getSelection()?.toString().trim();
-
-          if (!selectedText) {
-            return;
-          }
-
-          rendition!.annotations.highlight(
-            cfiRange,
-            {},
-            () => undefined,
-            "reader-highlight",
-            { fill: "#f7d560", "fill-opacity": "0.45" }
-          );
-          onSelectionRef.current({
-            text: selectedText.slice(0, 600),
-            locator: {
-              kind: "epub",
-              cfi: cfiRange
-            }
-          });
-        });
-
         rendition.on("rendered", (_sectionValue, viewValue) => {
           const view = viewValue as { contents?: EpubContents };
           const document = view.contents?.document;
@@ -337,6 +317,11 @@ export function EpubReader({
           if (!boundGestureDocuments.current.has(document)) {
             boundGestureDocuments.current.add(document);
             gestureCleanups.current.push(bindEpubTouchGestures(document));
+            gestureCleanups.current.push(bindEpubSelectionContextMenu(
+              view.contents ?? { document },
+              (draft) => onSelectionRef.current(draft),
+              () => latestCfi.current
+            ));
           }
 
           applyEpubContentStyle(document, settingsRef.current);
@@ -591,6 +576,57 @@ function applyEpubContentStylesToRendition(
     if (contents.document) {
       applyEpubContentStyle(contents.document, settings);
     }
+  }
+}
+
+function bindEpubSelectionContextMenu(
+  contents: EpubContents,
+  onSelection: (selection: SelectionDraft) => void,
+  fallbackCfi: () => string
+): () => void {
+  const ownerDocument = contents.document;
+
+  if (!ownerDocument) {
+    return () => undefined;
+  }
+
+  const handleContextMenu = (event: MouseEvent) => {
+    event.preventDefault();
+
+    const root = ownerDocument.body ?? ownerDocument.documentElement;
+    const context = selectionContextFromContextMenuEvent(event, root);
+
+    if (!context) {
+      return;
+    }
+
+    const cfi = safeCfiFromEpubRange(contents, context.range) ?? fallbackCfi();
+    const draft: SelectionDraft = {
+      text: context.text.slice(0, 600),
+      locator: cfi
+        ? {
+            kind: "epub",
+            cfi
+          }
+        : undefined
+    };
+
+    void showReaderContextMenu({
+      position: menuPositionFromContextMenuEvent(event),
+      onAddNote: () => onSelection(draft)
+    });
+  };
+
+  ownerDocument.addEventListener("contextmenu", handleContextMenu);
+
+  return () => ownerDocument.removeEventListener("contextmenu", handleContextMenu);
+}
+
+function safeCfiFromEpubRange(contents: EpubContents, range: Range): string | undefined {
+  try {
+    return contents.cfiFromRange?.(range);
+  } catch {
+    return undefined;
   }
 }
 

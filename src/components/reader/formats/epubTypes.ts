@@ -52,6 +52,7 @@ export interface EpubLocation {
 export interface EpubContents {
   document?: Document;
   window?: Window;
+  cfiFromRange?(range: Range, ignoreClass?: string): string;
 }
 
 export interface EpubNavItem {

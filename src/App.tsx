@@ -11,6 +11,7 @@ import {
   routeForGroup,
   routeForLocator
 } from "./lib/routes";
+import { bindAppViewportHeight } from "./lib/viewport";
 
 const EMPTY_LIBRARY: LibrarySnapshot = {
   books: [],
@@ -45,6 +46,20 @@ export default function App() {
     [activeBookId, library.books]
   );
   const currentRoute = `${location.pathname}${location.search}`;
+
+  useEffect(() => bindAppViewportHeight(), []);
+
+  useEffect(() => {
+    const isReaderActive = Boolean(activeBook);
+
+    document.documentElement.classList.toggle("reader-active", isReaderActive);
+    document.body.classList.toggle("reader-active", isReaderActive);
+
+    return () => {
+      document.documentElement.classList.remove("reader-active");
+      document.body.classList.remove("reader-active");
+    };
+  }, [activeBook]);
 
   useEffect(() => {
     if (!isBusy && route.view === "reader" && !activeBook) {

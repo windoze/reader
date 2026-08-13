@@ -34,9 +34,18 @@ describe("pagination layout", () => {
 
     expect(phone.pageMode).toBe(1);
     expect(phone.sheetWidth).toBeLessThanOrEqual(390);
+    expect(phone.sheetHeight).toBe(764);
     expect(portraitTablet.pageMode).toBe(1);
     expect(desktop.pageMode).toBe(2);
     expect(desktop.sheetWidth * 2 + desktop.pageGap).toBeLessThanOrEqual(1280);
+  });
+
+  it("does not let the page surface exceed the mobile stage height", () => {
+    const phone = buildPaginationLayout({ width: 390, height: 844 }, settings, { minSheetHeight: 360 });
+    const shortPhone = buildPaginationLayout({ width: 390, height: 420 }, settings, { minSheetHeight: 360 });
+
+    expect(phone.sheetHeight).toBeLessThanOrEqual(844 - 80);
+    expect(shortPhone.sheetHeight).toBe(340);
   });
 
   it("keeps paragraph spacing in css variables and pagination fingerprints", () => {

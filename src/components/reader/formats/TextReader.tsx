@@ -6,7 +6,7 @@ import {
   useRef,
   useState
 } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type {
   Annotation,
   ReaderLocator,
@@ -20,6 +20,7 @@ import { chapterizeText } from "../../../services/text/chapterize";
 import { buildChapterBlocks, type TextPageBlock } from "../../../services/text/blocks";
 import { decodeTextBuffer } from "../../../services/text/encoding";
 import type { SelectionDraft } from "../annotations/SelectionAnnotator";
+import { showReaderContextMenu } from "../readerContextMenu";
 import {
   buildPaginationLayout,
   paginationCssVariables,
@@ -31,6 +32,11 @@ import {
   paginateTextBlocks,
   type TextPage
 } from "./textPagination";
+import {
+  menuPositionFromContextMenuEvent,
+  selectionContextFromContextMenuEvent,
+  textOffsetInBlock
+} from "../selectionContext";
 
 interface TextReaderProps {
   annotations?: Annotation[];
@@ -476,51 +482,6 @@ export function TextReader({
     text.length
   ]);
 
-  useEffect(() => {
-    const stage = stageRef.current;
-
-    if (!stage) {
-      return;
-    }
-
-    const handleSelection = () => {
-      const selection = document.getSelection();
-      const selectedText = selection?.toString().trim();
-
-      if (!selection || !selectedText || selectedText.length < 2) {
-        return;
-      }
-
-      if (selection.anchorNode && !stage.contains(selection.anchorNode)) {
-        return;
-      }
-
-      const page = pages[Math.min(pageIndex, pages.length - 1)];
-
-      onSelection({
-        text: selectedText.slice(0, 600),
-        locator: activeChapter && page
-          ? {
-              kind: "txt",
-              chapterId: activeChapter.id,
-              offset: page.startOffset,
-              percentage: text.length === 0
-                ? 0
-                : (activeChapter.start + page.startOffset) / text.length
-            }
-          : undefined
-      });
-    };
-
-    stage.addEventListener("mouseup", handleSelection);
-    stage.addEventListener("keyup", handleSelection);
-
-    return () => {
-      stage.removeEventListener("mouseup", handleSelection);
-      stage.removeEventListener("keyup", handleSelection);
-    };
-  }, [activeChapter, onSelection, pageIndex, pages, text.length]);
-
   const selectChapter = (chapterId: string) => {
     ignoreCurrentIncomingLocator();
     anchorLocatorRef.current = undefined;
@@ -611,6 +572,41 @@ export function TextReader({
       setPageIndex(0);
     }
   }, [activeChapterIndex, chapters, goToPage, pageIndex, pageMode, pages.length]);
+
+  const handleContextMenu = useCallback((event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault();
+
+    const stage = stageRef.current;
+
+    if (!stage || !activeChapter) {
+      return;
+    }
+
+    const context = selectionContextFromContextMenuEvent(event.nativeEvent, stage);
+
+    if (!context) {
+      return;
+    }
+
+    const currentPage = pages[Math.min(pageIndex, pages.length - 1)];
+    const offset = textOffsetInBlock(context.range.startContainer, context.range.startOffset) ??
+      currentPage?.startOffset ??
+      0;
+    const draft: SelectionDraft = {
+      text: context.text.slice(0, 600),
+      locator: {
+        kind: "txt",
+        chapterId: activeChapter.id,
+        offset,
+        percentage: text.length === 0 ? 0 : (activeChapter.start + offset) / text.length
+      }
+    };
+
+    void showReaderContextMenu({
+      position: menuPositionFromContextMenuEvent(event.nativeEvent),
+      onAddNote: () => onSelection(draft)
+    });
+  }, [activeChapter, onSelection, pageIndex, pages, text.length]);
 
   function ignoreCurrentIncomingLocator() {
     if (!incomingTxtChapterId) {
@@ -751,6 +747,7 @@ export function TextReader({
         style={{
           ...paginationCssVariables(paginationLayout, settings)
         } as CSSProperties}
+        onContextMenu={handleContextMenu}
       >
         <div
           className={`book-spread pages-${pageMode}${turnDirection ? ` turn-${turnDirection}` : ""}`}
@@ -820,13 +817,23 @@ function renderPageBlock(
   const children = renderAnnotatedText(block, annotationHighlights);
 
   if (block.kind === "heading") {
-    return <h2 key={`${block.start}-${index}`}>{children}</h2>;
+    return (
+      <h2
+        data-reader-text-block-end={block.end}
+        data-reader-text-block-start={block.start}
+        key={`${block.start}-${index}`}
+      >
+        {children}
+      </h2>
+    );
   }
 
   return (
     <p
       data-continuation={block.isContinuation ? "true" : undefined}
       data-continues={block.continuesToNext ? "true" : undefined}
+      data-reader-text-block-end={block.end}
+      data-reader-text-block-start={block.start}
       key={`${block.start}-${index}`}
     >
       {children}
