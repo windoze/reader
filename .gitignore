@@ -1,4 +1,5 @@
 /target
+/src-tauri/target
 /dist
 /output
 /node_modules

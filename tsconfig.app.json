@@ -18,6 +18,6 @@
     "types": ["vite/client", "vitest/globals"],
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo"
   },
-  "include": ["src/ui"],
-  "exclude": ["src/ui/**/*.test.ts", "src/ui/**/*.test.tsx"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }
