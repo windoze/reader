@@ -19,7 +19,7 @@ const CHAPTER_CHARS = "章节回卷部篇集";
 const CHINESE_NUMERAL = "零〇一二两三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟";
 const HEADING_PATTERNS: Array<{ pattern: RegExp; level: number; weight: number }> = [
   {
-    pattern: new RegExp(`^第\\s*[${CHINESE_NUMERAL}0-9０-９]+\\s*[${CHAPTER_CHARS}]\\s*[:：、.．\\-—]?\\s*\\S{0,48}$`),
+    pattern: new RegExp(`^第\\s*[${CHINESE_NUMERAL}0-9０-９]+\\s*[${CHAPTER_CHARS}]\\s*[:：、.．\\-—]?\\s*.{0,56}$`),
     level: 2,
     weight: 80
   },

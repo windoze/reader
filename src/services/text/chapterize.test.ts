@@ -47,6 +47,17 @@ describe("TXT decoding and chapterization", () => {
     expect(chapters.at(-1)?.end).toBe(text.length);
   });
 
+  it("recognizes classic chapter titles with spaces in the heading", () => {
+    const text = readSample("三国演义.txt");
+    const chapters = chapterizeText(text);
+    const chapterTitles = chapters.map((chapter) => chapter.title);
+
+    expect(chapterTitles).toContain("第一回 宴桃园豪杰三结义 斩黄巾英雄首立功");
+    expect(chapterTitles).toContain("第一百二十回 荐杜预老将献新谋 降孙皓三分归一统");
+    expect(chapterTitles.filter((title) => /^第[零一二三四五六七八九十百千万]+回/.test(title))).toHaveLength(120);
+    expect(chapters.at(-1)?.end).toBe(text.length);
+  });
+
   it("recognizes common chapter heading variants", () => {
     const text = [
       "序章",
