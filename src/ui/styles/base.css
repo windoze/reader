@@ -1,0 +1,100 @@
+:root {
+  color-scheme: light;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  background: #f3f0ea;
+  color: #27231f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.new-group-form input,
+.book-actions select,
+.setting-row select,
+.selection-annotator textarea {
+  width: 100%;
+  border: 1px solid rgba(68, 59, 48, 0.17);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #2e2923;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.primary-button,
+.secondary-button,
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid rgba(61, 52, 43, 0.12);
+  border-radius: 8px;
+  min-height: 38px;
+  color: #2b241d;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(55, 46, 38, 0.07);
+}
+
+.primary-button {
+  padding: 0 15px;
+  background: #28231f;
+  color: #fffaf1;
+}
+
+.primary-button.full {
+  width: 100%;
+}
+
+.secondary-button {
+  padding: 0 15px;
+}
+
+.icon-button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+}
+
+.icon-button.subtle {
+  background: transparent;
+  box-shadow: none;
+}
+
+.icon-button.danger {
+  color: #9d3028;
+}
+
+.icon-button.split {
+  width: auto;
+  padding: 0 9px;
+}
