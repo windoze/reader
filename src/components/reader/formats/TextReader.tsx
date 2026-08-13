@@ -6,8 +6,14 @@ import {
   useRef,
   useState
 } from "react";
-import type { CSSProperties } from "react";
-import type { ReaderLocator, ReaderSettings, StoredBookFile, TextChapter } from "../../../domain/types";
+import type { CSSProperties, ReactNode } from "react";
+import type {
+  Annotation,
+  ReaderLocator,
+  ReaderSettings,
+  StoredBookFile,
+  TextChapter
+} from "../../../domain/types";
 import { shouldHandleReaderNavigationKey } from "../../../lib/keyboard";
 import type { LibraryRepository } from "../../../services/libraryRepository";
 import { chapterizeText } from "../../../services/text/chapterize";
@@ -27,6 +33,7 @@ import {
 } from "./textPagination";
 
 interface TextReaderProps {
+  annotations?: Annotation[];
   bookId: string;
   file: StoredBookFile;
   initialLocator: ReaderLocator;
@@ -63,12 +70,20 @@ interface TextSearchResult {
   suffixEllipsis: boolean;
 }
 
+interface TextAnnotationHighlight {
+  id: string;
+  color: string;
+  start: number;
+  end: number;
+}
+
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_CONTEXT_LENGTH = 10;
 const SEARCH_FULL_PARAGRAPH_LIMIT = 80;
 const SEARCH_RESULT_LIMIT = 200;
 
 export function TextReader({
+  annotations = [],
   bookId,
   file,
   initialLocator,
@@ -198,6 +213,13 @@ export function TextReader({
       text.slice(activeChapter.start, activeChapter.end)
     );
   }, [activeChapter, storedTextBlocks, text]);
+
+  const annotationHighlights = useMemo(
+    () => activeChapter
+      ? resolveTextAnnotationHighlights(annotations, activeChapter.id, blocks)
+      : [],
+    [activeChapter, annotations, blocks]
+  );
 
   const searchableChapters = useMemo<SearchableChapter[]>(
     () => chapters.map((chapter) => ({
@@ -744,7 +766,9 @@ export function TextReader({
                 lineHeight: settings.lineHeight
               }}
             >
-              {page.blocks.map((block, blockIndex) => renderPageBlock(block, blockIndex))}
+              {page.blocks.map((block, blockIndex) =>
+                renderPageBlock(block, blockIndex, annotationHighlights)
+              )}
             </article>
           ))}
         </div>
@@ -788,9 +812,15 @@ function renderMeasureBlock(block: TextPageBlock): HTMLElement {
   return element;
 }
 
-function renderPageBlock(block: TextPageBlock, index: number) {
+function renderPageBlock(
+  block: TextPageBlock,
+  index: number,
+  annotationHighlights: TextAnnotationHighlight[]
+) {
+  const children = renderAnnotatedText(block, annotationHighlights);
+
   if (block.kind === "heading") {
-    return <h2 key={`${block.start}-${index}`}>{block.text}</h2>;
+    return <h2 key={`${block.start}-${index}`}>{children}</h2>;
   }
 
   return (
@@ -799,9 +829,140 @@ function renderPageBlock(block: TextPageBlock, index: number) {
       data-continues={block.continuesToNext ? "true" : undefined}
       key={`${block.start}-${index}`}
     >
-      {block.text}
+      {children}
     </p>
   );
+}
+
+function renderAnnotatedText(
+  block: TextPageBlock,
+  annotationHighlights: TextAnnotationHighlight[]
+) {
+  const blockHighlights = annotationHighlights.filter(
+    (highlight) => highlight.start < block.end && highlight.end > block.start
+  );
+
+  if (blockHighlights.length === 0) {
+    return block.text;
+  }
+
+  const segments: ReactNode[] = [];
+  let cursor = 0;
+
+  for (const highlight of blockHighlights) {
+    const start = Math.max(0, highlight.start - block.start);
+    const end = Math.min(block.text.length, highlight.end - block.start);
+
+    if (start < cursor || end <= start) {
+      continue;
+    }
+
+    if (start > cursor) {
+      segments.push(block.text.slice(cursor, start));
+    }
+
+    segments.push(
+      <mark
+        className="text-annotation-highlight"
+        data-annotation-id={highlight.id}
+        key={`${highlight.id}-${highlight.start}-${highlight.end}`}
+        style={{ backgroundColor: highlight.color }}
+      >
+        {block.text.slice(start, end)}
+      </mark>
+    );
+    cursor = end;
+  }
+
+  if (cursor < block.text.length) {
+    segments.push(block.text.slice(cursor));
+  }
+
+  return segments;
+}
+
+function resolveTextAnnotationHighlights(
+  annotations: Annotation[],
+  chapterId: string,
+  blocks: TextPageBlock[]
+): TextAnnotationHighlight[] {
+  const highlights = annotations
+    .filter((annotation) => annotation.locator.kind === "txt" && annotation.locator.chapterId === chapterId)
+    .map((annotation) => {
+      if (annotation.locator.kind !== "txt") {
+        return undefined;
+      }
+
+      const match = findTextAnnotationMatch(blocks, annotation.text.trim(), annotation.locator.offset);
+
+      if (!match) {
+        return undefined;
+      }
+
+      return {
+        id: annotation.id,
+        color: annotation.color,
+        start: match.start,
+        end: match.end
+      };
+    })
+    .filter((highlight): highlight is TextAnnotationHighlight => Boolean(highlight))
+    .sort((left, right) => left.start - right.start || right.end - left.end);
+
+  const resolved: TextAnnotationHighlight[] = [];
+  let occupiedUntil = -1;
+
+  for (const highlight of highlights) {
+    if (highlight.start < occupiedUntil) {
+      continue;
+    }
+
+    resolved.push(highlight);
+    occupiedUntil = highlight.end;
+  }
+
+  return resolved;
+}
+
+function findTextAnnotationMatch(
+  blocks: TextPageBlock[],
+  text: string,
+  anchorOffset: number
+): { start: number; end: number } | undefined {
+  if (text.length === 0) {
+    return undefined;
+  }
+
+  let bestMatch: { start: number; end: number; distance: number } | undefined;
+
+  for (const block of blocks) {
+    let fromIndex = 0;
+
+    while (fromIndex < block.text.length) {
+      const matchIndex = block.text.indexOf(text, fromIndex);
+
+      if (matchIndex === -1) {
+        break;
+      }
+
+      const start = block.start + matchIndex;
+      const distance = start >= anchorOffset
+        ? start - anchorOffset
+        : anchorOffset - start + text.length;
+
+      if (!bestMatch || distance < bestMatch.distance) {
+        bestMatch = {
+          start,
+          end: start + text.length,
+          distance
+        };
+      }
+
+      fromIndex = matchIndex + Math.max(text.length, 1);
+    }
+  }
+
+  return bestMatch ? { start: bestMatch.start, end: bestMatch.end } : undefined;
 }
 
 function renderSearchSnippet(result: TextSearchResult) {

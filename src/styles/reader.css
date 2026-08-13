@@ -563,6 +563,14 @@
   text-indent: 0;
 }
 
+.text-annotation-highlight {
+  border-radius: 3px;
+  padding: 0 1px;
+  color: #271f16;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
 .text-page-measure {
   position: fixed;
   left: -10000px;

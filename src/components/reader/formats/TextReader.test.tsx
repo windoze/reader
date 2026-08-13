@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReaderLocator, ReaderSettings, StoredBookFile, TextChapter } from "../../../domain/types";
+import type {
+  Annotation,
+  ReaderLocator,
+  ReaderSettings,
+  StoredBookFile,
+  TextChapter
+} from "../../../domain/types";
 import { TextReader } from "./TextReader";
 
 const settings: ReaderSettings = {
@@ -200,6 +206,54 @@ describe("TextReader pagination", () => {
       expect(lastLocator?.kind === "txt" ? lastLocator.offset : 0).toBeGreaterThan(0);
     });
     expect(onSearchOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("renders saved annotation highlights in the page text", async () => {
+    const { file } = makeBookFile();
+    const annotations: Annotation[] = [
+      {
+        id: "annotation-1",
+        bookId: "book-1",
+        text: "第一章首页段落一",
+        note: "重点",
+        color: "#8bd3dd",
+        locator: {
+          kind: "txt",
+          chapterId: "chapter-1",
+          offset: 0,
+          percentage: 0
+        },
+        createdAt: 1
+      }
+    ];
+
+    render(
+      <TextReader
+        annotations={annotations}
+        bookId="book-1"
+        file={file}
+        initialLocator={{
+          kind: "txt",
+          chapterId: "chapter-1",
+          offset: 0,
+          percentage: 0
+        }}
+        layoutCache={emptyLayoutCache}
+        settings={settings}
+        tocOpen={false}
+        onChapterTitleChange={() => undefined}
+        onExcerptChange={() => undefined}
+        onLocatorChange={() => undefined}
+        onSelection={() => undefined}
+        onTocOpenChange={() => undefined}
+      />
+    );
+
+    const highlight = await screen.findByText("第一章首页段落一");
+
+    expect(highlight.tagName).toBe("MARK");
+    expect(highlight).toHaveClass("text-annotation-highlight");
+    expect(highlight).toHaveStyle({ backgroundColor: "#8bd3dd" });
   });
 });
 
