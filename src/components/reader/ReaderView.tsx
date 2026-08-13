@@ -88,6 +88,7 @@ export function ReaderView({
   const annotationsButtonRef = useRef<HTMLButtonElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const annotationsPanelRef = useRef<HTMLDivElement>(null);
+  const selectionAnnotatorRef = useRef<HTMLElement>(null);
   const controlsVisibleRef = useRef(true);
   const controlsPinnedRef = useRef(false);
   const pointerGestureRef = useRef<ReaderPointerGesture | undefined>(undefined);
@@ -264,7 +265,7 @@ export function ReaderView({
   }, [book.format, effectiveRouteLocator, routeLocatorKey]);
 
   useEffect(() => {
-    if (!tocOpen && !searchOpen && !showBookmarks && !showSettings && !showAnnotations) {
+    if (!tocOpen && !searchOpen && !showBookmarks && !showSettings && !showAnnotations && !selection) {
       return;
     }
 
@@ -306,6 +307,10 @@ export function ReaderView({
       ) {
         setShowAnnotations(false);
       }
+
+      if (selection && !selectionAnnotatorRef.current?.contains(target)) {
+        setSelection(undefined);
+      }
     };
 
     const handleWindowBlur = () => {
@@ -316,6 +321,7 @@ export function ReaderView({
           setShowBookmarks(false);
           setShowSettings(false);
           setShowAnnotations(false);
+          setSelection(undefined);
         }
       }, 0);
     };
@@ -327,7 +333,7 @@ export function ReaderView({
       document.removeEventListener("pointerdown", handlePointerDown, true);
       window.removeEventListener("blur", handleWindowBlur);
     };
-  }, [searchOpen, showAnnotations, showBookmarks, showSettings, tocOpen]);
+  }, [searchOpen, selection, showAnnotations, showBookmarks, showSettings, tocOpen]);
 
   const persistLocator = useCallback(
     (nextLocator: ReaderLocator) => {
@@ -748,6 +754,7 @@ export function ReaderView({
       {selection ? (
         <SelectionAnnotator
           draft={selection}
+          ref={selectionAnnotatorRef}
           onCancel={() => setSelection(undefined)}
           onSave={handleAddAnnotation}
         />

@@ -1,5 +1,5 @@
 import { Check, X } from "lucide-react";
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import type { ReaderLocator } from "../../../domain/types";
 
 export interface SelectionDraft {
@@ -15,12 +15,13 @@ interface SelectionAnnotatorProps {
 
 const COLORS = ["#f7d560", "#8bd3dd", "#b8e986", "#f5a3b7"];
 
-export function SelectionAnnotator({ draft, onCancel, onSave }: SelectionAnnotatorProps) {
+export const SelectionAnnotator = forwardRef<HTMLElement, SelectionAnnotatorProps>(
+function SelectionAnnotator({ draft, onCancel, onSave }, ref) {
   const [note, setNote] = useState("");
   const [color, setColor] = useState(COLORS[0]);
 
   return (
-    <aside className="selection-annotator">
+    <aside className="selection-annotator" ref={ref}>
       <p>{draft.text}</p>
       <textarea
         aria-label="注解内容"
@@ -56,4 +57,4 @@ export function SelectionAnnotator({ draft, onCancel, onSave }: SelectionAnnotat
       </div>
     </aside>
   );
-}
+});
