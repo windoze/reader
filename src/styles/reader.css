@@ -551,6 +551,18 @@
   overflow-wrap: anywhere;
 }
 
+.text-page p:last-child,
+.text-page-measure p:last-child,
+.text-page p[data-continues="true"],
+.text-page-measure p[data-continues="true"] {
+  margin-bottom: 0;
+}
+
+.text-page p[data-continuation="true"],
+.text-page-measure p[data-continuation="true"] {
+  text-indent: 0;
+}
+
 .text-page-measure {
   position: fixed;
   left: -10000px;

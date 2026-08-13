@@ -42,6 +42,8 @@ export interface TextContentBlock {
   text: string;
   start: number;
   end: number;
+  isContinuation?: boolean;
+  continuesToNext?: boolean;
 }
 
 export interface TextChapterBlocks {

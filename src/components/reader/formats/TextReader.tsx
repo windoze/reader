@@ -776,6 +776,15 @@ export function TextReader({
 function renderMeasureBlock(block: TextPageBlock): HTMLElement {
   const element = document.createElement(block.kind === "heading" ? "h2" : "p");
   element.textContent = block.text;
+
+  if (block.isContinuation) {
+    element.dataset.continuation = "true";
+  }
+
+  if (block.continuesToNext) {
+    element.dataset.continues = "true";
+  }
+
   return element;
 }
 
@@ -784,7 +793,15 @@ function renderPageBlock(block: TextPageBlock, index: number) {
     return <h2 key={`${block.start}-${index}`}>{block.text}</h2>;
   }
 
-  return <p key={`${block.start}-${index}`}>{block.text}</p>;
+  return (
+    <p
+      data-continuation={block.isContinuation ? "true" : undefined}
+      data-continues={block.continuesToNext ? "true" : undefined}
+      key={`${block.start}-${index}`}
+    >
+      {block.text}
+    </p>
+  );
 }
 
 function renderSearchSnippet(result: TextSearchResult) {

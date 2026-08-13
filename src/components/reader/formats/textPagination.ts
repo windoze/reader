@@ -8,6 +8,8 @@ export interface TextPage {
 
 export type MeasureBlocks = (blocks: TextPageBlock[]) => number;
 
+const MIN_REMAINDER_FRAGMENT_LENGTH = 16;
+
 export function paginateTextBlocks(
   blocks: TextPageBlock[],
   pageHeight: number,
@@ -17,30 +19,61 @@ export function paginateTextBlocks(
   let current: TextPageBlock[] = [];
 
   for (const block of blocks) {
-    const candidate = [...current, block];
-
-    if (measureBlocks(candidate) <= pageHeight || current.length === 0) {
-      if (measureBlocks(candidate) <= pageHeight) {
-        current = candidate;
-        continue;
+    if (block.kind === "heading") {
+      if (current.length > 0 && measureBlocks([...current, block]) > pageHeight) {
+        pages.push(createPage(current));
+        current = [];
       }
 
-      const splitBlocks = splitOversizedBlock(block, pageHeight, measureBlocks);
-
-      for (const splitBlock of splitBlocks) {
-        if (measureBlocks([...current, splitBlock]) > pageHeight && current.length > 0) {
-          pages.push(createPage(current));
-          current = [];
-        }
-
-        current.push(splitBlock);
-      }
-
+      current.push(block);
       continue;
     }
 
-    pages.push(createPage(current));
-    current = [block];
+    let remainingBlock: TextPageBlock | undefined = block;
+
+    while (remainingBlock) {
+      if (measureBlocks([...current, remainingBlock]) <= pageHeight) {
+        current.push(remainingBlock);
+        remainingBlock = undefined;
+        continue;
+      }
+
+      const split = splitParagraphForPage(
+        remainingBlock,
+        current,
+        pageHeight,
+        measureBlocks
+      );
+
+      if (split) {
+        current.push(split.current);
+        pages.push(createPage(current));
+        current = [];
+        remainingBlock = split.remaining;
+        continue;
+      }
+
+      if (current.length > 0) {
+        pages.push(createPage(current));
+        current = [];
+        continue;
+      }
+
+      const fallbackSplit = splitParagraphForPage(
+        remainingBlock,
+        [],
+        Number.POSITIVE_INFINITY,
+        measureBlocks
+      );
+
+      current.push(fallbackSplit?.current ?? remainingBlock);
+      remainingBlock = fallbackSplit?.remaining;
+
+      if (remainingBlock) {
+        pages.push(createPage(current));
+        current = [];
+      }
+    }
   }
 
   if (current.length > 0) {
@@ -51,79 +84,96 @@ export function paginateTextBlocks(
 }
 
 export function pageIndexForOffset(pages: TextPage[], offset: number): number {
-  const index = pages.findIndex((page) => offset >= page.startOffset && offset <= page.endOffset);
+  const index = pages.findIndex((page, pageIndex) =>
+    offset >= page.startOffset &&
+    (offset < page.endOffset || (pageIndex === pages.length - 1 && offset <= page.endOffset))
+  );
   return index === -1 ? 0 : index;
 }
 
-function splitOversizedBlock(
+function splitParagraphForPage(
   block: TextPageBlock,
+  previousBlocks: TextPageBlock[],
   pageHeight: number,
   measureBlocks: MeasureBlocks
-): TextPageBlock[] {
-  if (block.kind === "heading") {
-    return [block];
+): { current: TextPageBlock; remaining: TextPageBlock } | undefined {
+  if (block.kind !== "paragraph" || block.text.length <= 1) {
+    return undefined;
   }
 
-  const chunks = splitTextChunks(block.text);
-  const splitBlocks: TextPageBlock[] = [];
-  let current = "";
-  let currentStart = block.start;
-  let cursor = block.start;
+  const fittingLength = findFittingTextLength(block, previousBlocks, pageHeight, measureBlocks);
 
-  for (const chunk of chunks) {
-    const candidate = `${current}${chunk}`;
-    const candidateBlock = {
+  if (
+    fittingLength <= 0 ||
+    (
+      previousBlocks.length > 0 &&
+      fittingLength < Math.min(MIN_REMAINDER_FRAGMENT_LENGTH, block.text.length - 1)
+    )
+  ) {
+    return undefined;
+  }
+
+  const splitIndex = refineSplitIndex(block.text, fittingLength);
+
+  return {
+    current: {
       ...block,
-      text: candidate,
-      start: currentStart,
-      end: cursor + chunk.length
-    };
-
-    if (measureBlocks([candidateBlock]) <= pageHeight || !current) {
-      current = candidate;
-      cursor += chunk.length;
-      continue;
+      text: block.text.slice(0, splitIndex),
+      end: block.start + splitIndex,
+      continuesToNext: true
+    },
+    remaining: {
+      ...block,
+      text: block.text.slice(splitIndex),
+      start: block.start + splitIndex,
+      isContinuation: true,
+      continuesToNext: undefined
     }
-
-    splitBlocks.push({
-      ...block,
-      text: current,
-      start: currentStart,
-      end: cursor
-    });
-    currentStart = cursor;
-    current = chunk;
-    cursor += chunk.length;
-  }
-
-  if (current) {
-    splitBlocks.push({
-      ...block,
-      text: current,
-      start: currentStart,
-      end: cursor
-    });
-  }
-
-  return splitBlocks;
+  };
 }
 
-function splitTextChunks(text: string): string[] {
-  const chunks = text.match(/[^。！？!?；;…]+[。！？!?；;…]?|.+$/g) ?? [text];
-  const result: string[] = [];
+function findFittingTextLength(
+  block: TextPageBlock,
+  previousBlocks: TextPageBlock[],
+  pageHeight: number,
+  measureBlocks: MeasureBlocks
+): number {
+  let low = 0;
+  let high = block.text.length - 1;
 
-  for (const chunk of chunks) {
-    if (chunk.length <= 120) {
-      result.push(chunk);
-      continue;
-    }
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    const candidate = {
+      ...block,
+      text: block.text.slice(0, middle),
+      end: block.start + middle,
+      continuesToNext: true
+    };
 
-    for (let index = 0; index < chunk.length; index += 80) {
-      result.push(chunk.slice(index, index + 80));
+    if (measureBlocks([...previousBlocks, candidate]) <= pageHeight) {
+      low = middle;
+    } else {
+      high = middle - 1;
     }
   }
 
-  return result;
+  return low;
+}
+
+function refineSplitIndex(text: string, fittingLength: number): number {
+  const safeLength = Math.min(Math.max(1, fittingLength), text.length - 1);
+  const minimum = Math.max(
+    1,
+    Math.min(safeLength - 1, Math.floor(safeLength * 0.55))
+  );
+
+  for (let index = safeLength; index >= minimum; index -= 1) {
+    if (/[。！？!?；;，,、：:）)」』”’]/.test(text[index - 1])) {
+      return index;
+    }
+  }
+
+  return safeLength;
 }
 
 function createPage(blocks: TextPageBlock[]): TextPage {

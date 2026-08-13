@@ -21,6 +21,7 @@ interface PaginationLayoutOptions {
 
 const PAGE_GAP = 24;
 const DESKTOP_SHEET_WIDTH_TARGET = 860;
+const TEXT_PAGINATION_VERSION = "txt-layout-v2";
 
 export function buildPaginationLayout(
   stageSize: PaginationStageSize,
@@ -69,6 +70,7 @@ export function paginationCssVariables(
 
 export function paginationFingerprint(settings: ReaderSettings, layout: PaginationLayout): string {
   return [
+    TEXT_PAGINATION_VERSION,
     layout.pageMode,
     layout.sheetWidth,
     layout.sheetHeight,

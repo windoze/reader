@@ -24,6 +24,10 @@ pub struct TextContentBlock {
     pub text: String,
     pub start: i64,
     pub end: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_continuation: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continues_to_next: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
